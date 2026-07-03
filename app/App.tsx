@@ -13,6 +13,7 @@ import SystemDecoderScreen from './src/screens/SystemDecoderScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import ContractorReportScreen from './src/screens/ContractorReportScreen';
 import ContractorLeadRequestScreen from './src/screens/ContractorLeadRequestScreen';
+import ContractorProfileClaimScreen from './src/screens/ContractorProfileClaimScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 
 export type RootStackParamList = {
@@ -26,6 +27,7 @@ export type RootStackParamList = {
   SystemDecoder: undefined;
   ContractorReport: undefined;
   ContractorLeadRequest: undefined;
+  ContractorProfileClaim: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -54,6 +56,7 @@ function AppNavigator() {
         <Stack.Screen name="SystemDecoder" component={SystemDecoderScreen} options={{ title: 'Decode My System' }} />
         <Stack.Screen name="ContractorReport" component={ContractorReportScreen} options={{ title: 'Contractor Report' }} />
         <Stack.Screen name="ContractorLeadRequest" component={ContractorLeadRequestScreen} options={{ title: 'Request Contractor Help' }} />
+        <Stack.Screen name="ContractorProfileClaim" component={ContractorProfileClaimScreen} options={{ title: 'Claim Contractor Profile' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
