@@ -1,7 +1,8 @@
 node_modules/
 .expo/
-dist/
-build/
+app/dist/
+app/build/
+app/web-build/
 .env
 app/.env
 .DS_Store

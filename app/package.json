@@ -1,0 +1,32 @@
+{
+  "name": "hvac-truth-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@react-navigation/bottom-tabs": "latest",
+    "@react-navigation/native": "latest",
+    "@react-navigation/native-stack": "latest",
+    "@supabase/supabase-js": "latest",
+    "expo": "latest",
+    "expo-status-bar": "latest",
+    "react": "latest",
+    "react-native": "latest",
+    "react-native-safe-area-context": "latest",
+    "react-native-screens": "latest",
+    "expo-image-picker": "latest",
+    "@react-native-async-storage/async-storage": "latest",
+    "react-native-url-polyfill": "latest",
+    "expo-file-system": "latest"
+  },
+  "devDependencies": {
+    "@babel/core": "latest",
+    "typescript": "latest"
+  }
+}
