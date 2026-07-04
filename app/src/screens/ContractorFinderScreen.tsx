@@ -9,6 +9,7 @@ export default function ContractorFinderScreen({ navigation }: any) {
   const [emergencyOnly, setEmergencyOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [providerMessage, setProviderMessage] = useState('');
+  const [persistedCount, setPersistedCount] = useState(0);
   const [results, setResults] = useState<ContractorSearchResult[]>([]);
 
   async function search() {
@@ -16,6 +17,7 @@ export default function ContractorFinderScreen({ navigation }: any) {
     try {
       const response = await searchContractors({ zipCode, emergencyOnly, maxResults: 10 });
       setResults(response.results);
+      setPersistedCount(response.persistedCount ?? response.results.filter((item) => item.persisted).length);
       setProviderMessage(response.message ?? `${response.results.length} contractor results found for ${response.zipCode}.`);
     } finally {
       setLoading(false);
@@ -24,8 +26,8 @@ export default function ContractorFinderScreen({ navigation }: any) {
 
   const statusText = useMemo(() => {
     if (!results.length) return 'Search by ZIP code to find well-reviewed contractors near the homeowner.';
-    return providerMessage;
-  }, [providerMessage, results.length]);
+    return `${providerMessage} ${persistedCount} result(s) are tied to persisted contractor records.`;
+  }, [providerMessage, persistedCount, results.length]);
 
   async function openBestRoute(contractor: ContractorSearchResult) {
     const route = detectContractorContactRoute(contractor);
@@ -67,12 +69,13 @@ export default function ContractorFinderScreen({ navigation }: any) {
       {loading ? <ActivityIndicator color="#0B66E4" size="large" /> : null}
 
       {results.map((contractor) => (
-        <View key={contractor.id ?? contractor.businessName} style={styles.card}>
+        <View key={contractor.id ?? contractor.contractorId ?? contractor.businessName} style={styles.card}>
           <View style={styles.rowBetweenTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{contractor.businessName}</Text>
               <Text style={styles.meta}>{contractor.rating ? `${contractor.rating.toFixed(1)} ★` : 'No rating'} · {contractor.reviewCount ?? 0} reviews · {contractor.distanceMiles ?? '?'} mi</Text>
               <Text style={styles.address}>{contractor.address ?? contractor.city ?? 'Address not shown yet'}</Text>
+              {contractor.contractorId ? <Text style={styles.recordId}>Contractor record: {contractor.contractorId.slice(0, 8)}...</Text> : null}
             </View>
             <View style={styles.scoreBadge}>
               <Text style={styles.score}>{contractor.trustScore}</Text>
@@ -81,9 +84,12 @@ export default function ContractorFinderScreen({ navigation }: any) {
           </View>
 
           <View style={styles.badgeRow}>
+            {contractor.persisted ? <Text style={styles.badge}>Persisted record</Text> : <Text style={styles.badgeMuted}>Provider-only</Text>}
+            {contractor.matchMethod ? <Text style={styles.badgeMuted}>{contractor.matchMethod}</Text> : null}
             {contractor.verified ? <Text style={styles.badge}>Verified listing</Text> : null}
             {contractor.emergencyService ? <Text style={styles.badgeAlert}>Emergency</Text> : null}
             {contractor.hvacTruthVerified ? <Text style={styles.badge}>HVAC Truth verified</Text> : null}
+            {contractor.acceptsDashboardLeads ? <Text style={styles.badge}>Dashboard leads</Text> : null}
           </View>
 
           <Text style={styles.route}>Best route: {contractor.contactRouteLabel}</Text>
@@ -100,7 +106,7 @@ export default function ContractorFinderScreen({ navigation }: any) {
         </View>
       ))}
 
-      <Text style={styles.note}>Production discovery should run through server-side providers, not directly from the mobile app. That keeps Google/Yelp keys off the phone and lets HVAC Truth cache, dedupe, score, and audit contractor results.</Text>
+      <Text style={styles.note}>Production discovery runs through server-side providers, not directly from the mobile app. That keeps provider keys off the phone and lets HVAC Truth cache, dedupe, score, persist, and audit contractor results.</Text>
     </ScrollView>
   );
 }
@@ -121,11 +127,13 @@ const styles = StyleSheet.create({
   name: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
   meta: { marginTop: 4, color: '#334155', fontWeight: '600' },
   address: { marginTop: 4, color: '#64748B' },
+  recordId: { marginTop: 4, color: '#64748B', fontSize: 12, fontWeight: '700' },
   scoreBadge: { width: 58, height: 58, borderRadius: 14, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' },
   score: { fontSize: 20, fontWeight: '900', color: '#0369A1' },
   scoreLabel: { fontSize: 11, color: '#0369A1', fontWeight: '700' },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   badge: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, fontSize: 12, fontWeight: '700' },
+  badgeMuted: { backgroundColor: '#E2E8F0', color: '#475569', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, fontSize: 12, fontWeight: '700' },
   badgeAlert: { backgroundColor: '#FFEDD5', color: '#9A3412', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, fontSize: 12, fontWeight: '700' },
   route: { marginTop: 12, fontWeight: '800', color: '#0B66E4' },
   reasons: { marginTop: 6, color: '#64748B', lineHeight: 20 },
