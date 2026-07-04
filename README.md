@@ -27,9 +27,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V15 — Persisted Contractor Discovery**.
+Current stage: **V16 — Search Result to Lead Request**.
 
-The app can now search contractor providers, match or create persisted contractor records, return real contractor IDs to the mobile app, and preserve HVAC Truth verification/dashboard-lead flags for V14 routing.
+The app can now search contractors, persist provider results to real contractor records, select a specific contractor from the finder, and carry that contractor into the homeowner lead request flow with ID, verification, dashboard lead, and contact-route data preserved.
 
 ## Build History
 
@@ -164,37 +164,15 @@ Direct dashboard delivery requires:
 
 ### V15 — Persisted Contractor Discovery
 
-V15 makes provider discovery usable for real dashboard routing.
-
-New V15 files:
-
-```text
-backend/supabase/migrations/20260703_v15_persisted_contractor_discovery.sql
-docs/features/PERSISTED_CONTRACTOR_DISCOVERY.md
-docs/build/NEXT_BUILD_STEPS_V15.md
-```
-
-Updated V15 files:
-
-```text
-backend/supabase/functions/contractor-discovery/index.ts
-app/src/services/contractorDiscovery.ts
-app/src/screens/ContractorFinderScreen.tsx
-README.md
-```
-
-V15 behavior:
-
 - Searches internal contractor records
 - Searches Google Places/Yelp when configured
 - Deduplicates provider results
-- Matches results to existing contractor records by Google Place ID, Yelp Business ID, phone, or normalized business key
-- Creates contractor records when no match exists
+- Matches or creates contractor records
 - Preserves HVAC Truth verification and dashboard lead flags
-- Returns `contractorId`, `persisted`, and `matchMethod` to the mobile app
+- Returns `contractorId`, `persisted`, and `matchMethod` to the app
 - Shows persisted record status in the contractor finder screen
 
-Run this migration before deploying the updated discovery function:
+Run:
 
 ```text
 backend/supabase/migrations/20260703_v15_persisted_contractor_discovery.sql
@@ -206,11 +184,40 @@ Then deploy:
 supabase functions deploy contractor-discovery
 ```
 
+### V16 — Search Result to Lead Request
+
+V16 connects contractor finder selections into the homeowner lead request flow.
+
+New V16 files:
+
+```text
+docs/features/SEARCH_RESULT_TO_LEAD_REQUEST.md
+docs/build/NEXT_BUILD_STEPS_V16.md
+```
+
+Updated V16 files:
+
+```text
+app/App.tsx
+app/src/screens/ContractorFinderScreen.tsx
+app/src/screens/ContractorLeadRequestScreen.tsx
+README.md
+```
+
+V16 behavior:
+
+- `Request Help` on a search result navigates to `ContractorLeadRequest`.
+- The selected contractor is passed through navigation state.
+- The lead request screen replaces the demo list with the selected contractor.
+- The selected contractor is preselected.
+- Contractor ID, verification state, dashboard lead flags, contact route data, and provider source data are preserved.
+- If no contractor is passed, the MVP demo list still works as a fallback.
+
 ## Next Recommended Build
 
-**V16 — Search Result to Lead Request**
+**V17 — Troubleshooting Workflow Engine**
 
-The contractor finder can now return persisted contractor records, but the lead request screen still starts from the MVP demo contractor list. V16 should let a homeowner select a real search result and carry that contractor into the lead request flow.
+Build deeper symptom-specific homeowner troubleshooting flows and attach the results to contractor reports and lead packets.
 
 ## Active Repository
 
