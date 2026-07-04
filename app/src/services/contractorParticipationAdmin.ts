@@ -2,12 +2,14 @@ import { supabase } from './supabase';
 import { ContractorParticipationStatus, buildContractorParticipationDecision } from './contractorParticipationRules';
 import { SelectedContractor } from './contractorLeadFlow';
 
+export type AdminParticipationStatus = 'active' | 'inactive' | 'paused' | 'suspended';
+
 export type ContractorParticipationAdminRecord = SelectedContractor & {
   id: string;
   business_name?: string | null;
   hvac_truth_verified?: boolean | null;
   accepts_dashboard_leads?: boolean | null;
-  hvac_truth_participation_status?: ContractorParticipationStatus | 'inactive' | 'suspended' | null;
+  hvac_truth_participation_status?: ContractorParticipationStatus | AdminParticipationStatus | null;
   participation_paused?: boolean | null;
   participation_pause_reason?: string | null;
   service_zip_codes?: string[] | null;
@@ -19,7 +21,7 @@ export type ContractorParticipationAdminRecord = SelectedContractor & {
 
 export type ParticipationUpdateInput = {
   contractorId: string;
-  participationStatus?: 'active' | 'inactive' | 'paused' | 'suspended';
+  participationStatus?: AdminParticipationStatus;
   paused?: boolean;
   pauseReason?: string;
   serviceZipCodes?: string[];
@@ -34,15 +36,27 @@ function normalizeArray(value: unknown): string[] {
 }
 
 function mapContractor(row: any): ContractorParticipationAdminRecord {
+  const serviceZipCodes = normalizeArray(row.service_zip_codes);
+  const participationPaused = Boolean(row.participation_paused || row.hvac_truth_participation_status === 'paused');
+  const acceptsDashboardLeads = Boolean(row.accepts_dashboard_leads && row.hvac_truth_participation_status !== 'inactive' && row.hvac_truth_participation_status !== 'suspended');
+
   return {
     ...row,
     id: row.id,
+    contractorId: row.id,
     businessName: row.business_name,
     hvacTruthVerified: row.hvac_truth_verified,
-    acceptsDashboardLeads: row.accepts_dashboard_leads,
+    acceptsDashboardLeads,
+    accepts_dashboard_leads: acceptsDashboardLeads,
+    participationPaused,
+    participation_paused: participationPaused,
     emergencyService: row.emergency_service,
-    serviceZipCodes: normalizeArray(row.service_zip_codes),
-    service_zip_codes: normalizeArray(row.service_zip_codes)
+    serviceZipCodes,
+    service_zip_codes: serviceZipCodes,
+    maxDailyLeads: row.max_daily_dashboard_leads ?? undefined,
+    maxWeeklyLeads: row.max_weekly_dashboard_leads ?? undefined,
+    max_daily_dashboard_leads: row.max_daily_dashboard_leads,
+    max_weekly_dashboard_leads: row.max_weekly_dashboard_leads
   };
 }
 
@@ -72,6 +86,7 @@ export async function updateContractorParticipation(input: ParticipationUpdateIn
   if (input.participationStatus !== undefined) {
     patch.hvac_truth_participation_status = input.participationStatus;
     patch.accepts_dashboard_leads = input.participationStatus === 'active';
+    patch.participation_paused = input.participationStatus === 'paused';
   }
   if (input.paused !== undefined) patch.participation_paused = input.paused;
   if (input.pauseReason !== undefined) patch.participation_pause_reason = input.pauseReason.trim() || null;
