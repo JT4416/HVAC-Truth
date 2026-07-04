@@ -12,6 +12,7 @@ export type ContractorSearchInput = {
 };
 
 export type ContractorSearchResult = SelectedContractor & {
+  contractorId?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -26,12 +27,15 @@ export type ContractorSearchResult = SelectedContractor & {
   trustScoreReasons: string[];
   contactRouteLabel: string;
   contactRouteMethod: string;
+  persisted?: boolean;
+  matchMethod?: string;
 };
 
 export type ContractorSearchResponse = {
   zipCode: string;
   providerStatus: 'live' | 'cached' | 'fallback_demo' | 'error';
   results: ContractorSearchResult[];
+  persistedCount?: number;
   message?: string;
 };
 
@@ -103,11 +107,14 @@ export function hydrateContractorSearchResult(contractor: SelectedContractor): C
   const route = detectContractorContactRoute(contractor);
   return {
     ...contractor,
+    contractorId: contractor.contractorId ?? contractor.id,
     sources: ['demo'],
     trustScore: score.trustScore,
     trustScoreReasons: score.trustScoreReasons,
     contactRouteLabel: route.label,
-    contactRouteMethod: route.preferredMethod
+    contactRouteMethod: route.preferredMethod,
+    persisted: Boolean(contractor.id || contractor.contractorId),
+    matchMethod: contractor.id || contractor.contractorId ? 'existing_record' : 'demo'
   };
 }
 
@@ -131,13 +138,16 @@ export async function searchContractors(input: ContractorSearchInput): Promise<C
 
     const rawResults = Array.isArray(data?.results) ? data.results : [];
     const results = rawResults.map((item: any): ContractorSearchResult => {
+      const contractorId = item.contractorId ?? item.id;
       const contractor: SelectedContractor = {
-        id: item.contractorId ?? item.id,
+        id: contractorId,
+        contractorId,
         businessName: item.businessName,
         phone: item.phone,
         website: item.website,
         contactPageUrl: item.contactPageUrl,
         publishedEmail: item.publishedEmail,
+        googlePlaceId: item.googlePlaceId,
         googleMapsUrl: item.googleMapsUrl,
         yelpBusinessUrl: item.yelpBusinessUrl,
         rating: item.rating,
@@ -153,6 +163,7 @@ export async function searchContractors(input: ContractorSearchInput): Promise<C
       const hydrated = hydrateContractorSearchResult(contractor);
       return {
         ...hydrated,
+        contractorId,
         address: item.address,
         city: item.city,
         state: item.state,
@@ -162,12 +173,20 @@ export async function searchContractors(input: ContractorSearchInput): Promise<C
         sourceIds: item.sourceIds ?? {},
         googlePlaceId: item.googlePlaceId,
         yelpBusinessId: item.yelpBusinessId,
-        reviewUrl: item.reviewUrl
+        reviewUrl: item.reviewUrl,
+        persisted: item.persisted ?? Boolean(contractorId),
+        matchMethod: item.matchMethod ?? (contractorId ? 'contractor_record' : 'provider_result')
       };
     }).sort((a: ContractorSearchResult, b: ContractorSearchResult) => b.trustScore - a.trustScore);
 
     if (results.length) {
-      return { zipCode, providerStatus: data?.providerStatus ?? 'live', results, message: data?.message };
+      return {
+        zipCode,
+        providerStatus: data?.providerStatus ?? 'live',
+        results,
+        persistedCount: data?.persistedCount ?? results.filter((item) => item.persisted).length,
+        message: data?.message
+      };
     }
   } catch (error) {
     console.warn('Contractor discovery function unavailable; using demo fallback.', error);
@@ -183,6 +202,7 @@ export async function searchContractors(input: ContractorSearchInput): Promise<C
     zipCode,
     providerStatus: 'fallback_demo',
     results: fallback,
+    persistedCount: 0,
     message: 'Using demo contractors until Google Places/Yelp keys and the contractor-discovery Edge Function are configured.'
   };
 }
