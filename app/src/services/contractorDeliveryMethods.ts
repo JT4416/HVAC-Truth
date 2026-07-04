@@ -14,6 +14,14 @@ export type ContractorDeliveryMethodRecord = {
   updated_at?: string;
 };
 
+export type ContractorDeliveryMethodReadSource = 'contractor_delivery_methods' | 'contractor_lead_preferences';
+
+export type ContractorDeliveryMethodReadResult = {
+  data: ContractorDeliveryMethodRecord[];
+  error: unknown;
+  source: ContractorDeliveryMethodReadSource;
+};
+
 export const CONTRACTOR_DELIVERY_METHOD_LABELS: Record<string, string> = {
   dashboard: 'HVAC Truth dashboard',
   verified_dashboard: 'HVAC Truth dashboard',
@@ -23,7 +31,7 @@ export const CONTRACTOR_DELIVERY_METHOD_LABELS: Record<string, string> = {
   website_form: 'Website contact form'
 };
 
-function mapDeliveryMethod(row: any): ContractorDeliveryMethodRecord {
+export function mapContractorDeliveryMethod(row: any): ContractorDeliveryMethodRecord {
   const method = row.delivery_method || row.preferred_method;
   return {
     ...row,
@@ -32,7 +40,19 @@ function mapDeliveryMethod(row: any): ContractorDeliveryMethodRecord {
   };
 }
 
-async function getLegacyContractorDeliveryMethods(contractorId: string) {
+export function buildContractorDeliveryMethodReadResult(
+  rows: any[] | null | undefined,
+  error: unknown,
+  source: ContractorDeliveryMethodReadSource
+): ContractorDeliveryMethodReadResult {
+  return {
+    data: (rows || []).map(mapContractorDeliveryMethod),
+    error,
+    source
+  };
+}
+
+async function getLegacyContractorDeliveryMethods(contractorId: string): Promise<ContractorDeliveryMethodReadResult> {
   const { data, error } = await supabase
     .from('contractor_lead_preferences')
     .select('*')
@@ -40,10 +60,10 @@ async function getLegacyContractorDeliveryMethods(contractorId: string) {
     .eq('active', true)
     .order('created_at', { ascending: true });
 
-  return { data: (data || []).map(mapDeliveryMethod), error };
+  return buildContractorDeliveryMethodReadResult(data, error, 'contractor_lead_preferences');
 }
 
-export async function getContractorDeliveryMethods(contractorId: string) {
+export async function getContractorDeliveryMethods(contractorId: string): Promise<ContractorDeliveryMethodReadResult> {
   const { data, error } = await supabase
     .from('contractor_delivery_methods')
     .select('*')
@@ -55,7 +75,7 @@ export async function getContractorDeliveryMethods(contractorId: string) {
     return getLegacyContractorDeliveryMethods(contractorId);
   }
 
-  return { data: (data || []).map(mapDeliveryMethod), error };
+  return buildContractorDeliveryMethodReadResult(data, error, 'contractor_delivery_methods');
 }
 
 export function formatContractorDeliveryMethod(value?: string | null) {
