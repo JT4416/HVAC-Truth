@@ -7,7 +7,7 @@ import { TroubleshootingAnswers, buildTroubleshootingSessionSnapshot, runTrouble
 import { getPrimarySystem } from '../services/profilePersistence';
 import { TroubleshootingSessionRecord, getRecentTroubleshootingSessions, saveTroubleshootingSession } from '../services/troubleshootingSessions';
 
-export default function TroubleshootingScreen() {
+export default function TroubleshootingScreen({ navigation }: any) {
   const { user } = useAuth();
   const [workflowId, setWorkflowId] = useState('both-indoor-outdoor-off-drain-float');
   const [answers, setAnswers] = useState<TroubleshootingAnswers>({});
@@ -30,7 +30,7 @@ export default function TroubleshootingScreen() {
       setLoadingSessions(true);
       const [system, sessions] = await Promise.all([
         getPrimarySystem(user.id),
-        getRecentTroubleshootingSessions(user.id, 5)
+        getRecentTroubleshootingSessions(user.id, 8)
       ]);
       setHvacSystemId(system?.id);
       setRecentSessions(sessions);
@@ -68,7 +68,7 @@ export default function TroubleshootingScreen() {
         attachToContractorReport: true,
         attachToLeadRequest: true
       });
-      setRecentSessions((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 5));
+      setRecentSessions((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 8));
       Alert.alert('Troubleshooting saved', 'This workflow result can now be attached to contractor reports and lead requests.');
     } catch (error: any) {
       Alert.alert('Could not save troubleshooting', error?.message ?? 'Please try again.');
@@ -83,14 +83,19 @@ export default function TroubleshootingScreen() {
       <Text style={styles.subtitle}>Choose the closest symptom. HVAC Truth will only show homeowner-safe checks and will stop at pro-only work.</Text>
 
       <View style={styles.historyCard}>
-        <Text style={styles.historyTitle}>Recent saved sessions</Text>
+        <View style={styles.historyHeader}>
+          <Text style={styles.historyTitle}>Recent saved sessions</Text>
+          <Pressable onPress={loadTroubleshootingContext}><Text style={styles.refreshText}>Refresh</Text></Pressable>
+        </View>
         {loadingSessions ? <ActivityIndicator color="#0B66E4" /> : null}
         {!loadingSessions && !recentSessions.length ? <Text style={styles.helper}>No saved troubleshooting sessions yet.</Text> : null}
         {recentSessions.map((session) => (
-          <View key={session.id} style={styles.historyItem}>
-            <Text style={styles.historyWorkflow}>{session.workflow_title}</Text>
+          <Pressable key={session.id} style={styles.historyItem} onPress={() => navigation.navigate('TroubleshootingSessionDetail', { sessionId: session.id })}>
+            <Text style={styles.historyWorkflow}>{session.homeowner_label || session.workflow_title}</Text>
+            <Text style={styles.historyMeta}>{session.workflow_title}</Text>
             <Text style={styles.historyMeta}>{session.severity.toUpperCase()} • {session.result_summary ?? 'No summary'}</Text>
-          </View>
+            <Text style={styles.historyFlags}>Report: {session.attach_to_contractor_report ? 'Attached' : 'Hidden'} • Leads: {session.attach_to_lead_request ? 'Attached' : 'Hidden'}</Text>
+          </Pressable>
         ))}
       </View>
 
@@ -170,10 +175,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '900', marginBottom: 8, color: '#0F172A' },
   subtitle: { fontSize: 15, lineHeight: 22, color: '#475569', marginBottom: 14 },
   historyCard: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#D8E2F0', padding: 14, marginBottom: 14 },
-  historyTitle: { color: '#0F172A', fontWeight: '900', marginBottom: 8 },
-  historyItem: { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 8, marginTop: 8 },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  historyTitle: { color: '#0F172A', fontWeight: '900' },
+  refreshText: { color: '#0B66E4', fontWeight: '900' },
+  historyItem: { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 9, marginTop: 9 },
   historyWorkflow: { color: '#0F172A', fontWeight: '900', marginBottom: 3 },
   historyMeta: { color: '#64748B', lineHeight: 18, fontSize: 12 },
+  historyFlags: { color: '#0F766E', lineHeight: 18, fontSize: 12, fontWeight: '800', marginTop: 2 },
   workflowGrid: { gap: 10, marginBottom: 14 },
   workflowCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, padding: 14 },
   workflowCardSelected: { backgroundColor: '#0B66E4', borderColor: '#0B66E4' },
