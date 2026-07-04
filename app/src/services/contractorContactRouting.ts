@@ -1,6 +1,7 @@
 import { Linking, Share } from 'react-native';
 import { supabase } from './supabase';
 import type { ContactPreference, LeadUrgency } from './contractorLeadFlow';
+import { buildPacketScoreText } from './contractorPacketScoring';
 
 export type ContractorContactMethodType = 'verified_dashboard' | 'published_email' | 'website_contact_form' | 'website' | 'phone' | 'sms' | 'google_profile' | 'yelp_profile' | 'none';
 export type ContractorContactRouteStatus = 'prepared' | 'opened' | 'email_prepared' | 'call_started' | 'sms_started' | 'shared' | 'manual_follow_up_needed' | 'blocked';
@@ -50,15 +51,8 @@ export type ContractorLeadPacket = {
   reportSnapshot?: Record<string, any>;
 };
 
-function cleanPhone(phone?: string) {
-  return (phone ?? '').replace(/[^0-9+]/g, '');
-}
-
-function makeWebsiteContactUrl(website?: string) {
-  if (!website) return undefined;
-  const normalized = website.startsWith('http') ? website : `https://${website}`;
-  return normalized.replace(/\/$/, '') + '/contact';
-}
+function cleanPhone(phone?: string) { return (phone ?? '').replace(/[^0-9+]/g, ''); }
+function makeWebsiteContactUrl(website?: string) { if (!website) return undefined; const normalized = website.startsWith('http') ? website : `https://${website}`; return normalized.replace(/\/$/, '') + '/contact'; }
 
 export function detectContractorContactRoute(contractor: ContractorContactProfile): ContractorContactRoute {
   const fallbackMethods: ContractorContactMethodType[] = [];
@@ -68,23 +62,11 @@ export function detectContractorContactRoute(contractor: ContractorContactProfil
   if (contractor.phone) fallbackMethods.push('phone', 'sms');
   if (contractor.googleMapsUrl || contractor.googlePlaceId) fallbackMethods.push('google_profile');
   if (contractor.yelpBusinessUrl) fallbackMethods.push('yelp_profile');
-
-  if (contractor.hvacTruthVerified && contractor.acceptsDashboardLeads) {
-    return { contractorName: contractor.businessName, preferredMethod: 'verified_dashboard', fallbackMethods, label: 'Send directly through HVAC Truth', instructions: 'This contractor is verified and can receive the lead packet directly in the HVAC Truth contractor portal.', canAutoSend: true, requiresHomeownerAction: false };
-  }
-  if (contractor.publishedEmail && contractor.acceptsEmailLeads !== false) {
-    return { contractorName: contractor.businessName, preferredMethod: 'published_email', fallbackMethods: fallbackMethods.filter((method) => method !== 'published_email'), destination: contractor.publishedEmail, label: 'Prepare email', instructions: 'Use the published email address from the contractor website or verified business profile. The homeowner can review before sending.', canAutoSend: false, requiresHomeownerAction: true };
-  }
-  if (contractor.contactPageUrl || contractor.website) {
-    const destination = contractor.contactPageUrl ?? makeWebsiteContactUrl(contractor.website);
-    return { contractorName: contractor.businessName, preferredMethod: contractor.contactPageUrl ? 'website_contact_form' : 'website', fallbackMethods: fallbackMethods.filter((method) => method !== 'website_contact_form' && method !== 'website'), destination, label: contractor.contactPageUrl ? 'Open contact form' : 'Open website', instructions: 'Open the contractor website and paste or submit the standardized lead packet through their contact/request-service flow.', canAutoSend: false, requiresHomeownerAction: true };
-  }
-  if (contractor.phone) {
-    return { contractorName: contractor.businessName, preferredMethod: 'phone', fallbackMethods: ['sms'], destination: contractor.phone, label: 'Call contractor', instructions: 'No reliable website contact method was found. Start a phone call and use the generated script.', canAutoSend: false, requiresHomeownerAction: true };
-  }
-  if (contractor.googleMapsUrl || contractor.yelpBusinessUrl) {
-    return { contractorName: contractor.businessName, preferredMethod: contractor.googleMapsUrl ? 'google_profile' : 'yelp_profile', fallbackMethods, destination: contractor.googleMapsUrl ?? contractor.yelpBusinessUrl, label: 'Open business profile', instructions: 'Open the public business profile and use the available call, website, or request-service option.', canAutoSend: false, requiresHomeownerAction: true };
-  }
+  if (contractor.hvacTruthVerified && contractor.acceptsDashboardLeads) return { contractorName: contractor.businessName, preferredMethod: 'verified_dashboard', fallbackMethods, label: 'Send directly through HVAC Truth', instructions: 'This contractor is verified and can receive the lead packet directly in the HVAC Truth contractor portal.', canAutoSend: true, requiresHomeownerAction: false };
+  if (contractor.publishedEmail && contractor.acceptsEmailLeads !== false) return { contractorName: contractor.businessName, preferredMethod: 'published_email', fallbackMethods: fallbackMethods.filter((method) => method !== 'published_email'), destination: contractor.publishedEmail, label: 'Prepare email', instructions: 'Use the published email address from the contractor website or verified business profile. The homeowner can review before sending.', canAutoSend: false, requiresHomeownerAction: true };
+  if (contractor.contactPageUrl || contractor.website) { const destination = contractor.contactPageUrl ?? makeWebsiteContactUrl(contractor.website); return { contractorName: contractor.businessName, preferredMethod: contractor.contactPageUrl ? 'website_contact_form' : 'website', fallbackMethods: fallbackMethods.filter((method) => method !== 'website_contact_form' && method !== 'website'), destination, label: contractor.contactPageUrl ? 'Open contact form' : 'Open website', instructions: 'Open the contractor website and paste or submit the standardized lead packet through their contact/request-service flow.', canAutoSend: false, requiresHomeownerAction: true }; }
+  if (contractor.phone) return { contractorName: contractor.businessName, preferredMethod: 'phone', fallbackMethods: ['sms'], destination: contractor.phone, label: 'Call contractor', instructions: 'No reliable website contact method was found. Start a phone call and use the generated script.', canAutoSend: false, requiresHomeownerAction: true };
+  if (contractor.googleMapsUrl || contractor.yelpBusinessUrl) return { contractorName: contractor.businessName, preferredMethod: contractor.googleMapsUrl ? 'google_profile' : 'yelp_profile', fallbackMethods, destination: contractor.googleMapsUrl ?? contractor.yelpBusinessUrl, label: 'Open business profile', instructions: 'Open the public business profile and use the available call, website, or request-service option.', canAutoSend: false, requiresHomeownerAction: true };
   return { contractorName: contractor.businessName, preferredMethod: 'none', fallbackMethods: [], label: 'No delivery route found', instructions: 'This contractor can be displayed in search results, but the app does not have a usable public contact route yet.', canAutoSend: false, requiresHomeownerAction: false };
 }
 
@@ -93,7 +75,6 @@ function buildContractorPacketLines(report: Record<string, any>) {
   if (!packet) return [];
   const photoAttachments = (packet.photoAttachments ?? []) as any[];
   const photoSummary = packet.photoAttachmentSummary;
-
   return [
     '',
     'Troubleshooting and contractor packet intelligence:',
@@ -116,6 +97,11 @@ function buildContractorPacketLines(report: Record<string, any>) {
     'Safe checklist status:',
     ...((packet.safeChecklist ?? []) as any[]).map((item) => `- ${item.label} [${item.status}]: ${item.detail}`)
   ];
+}
+
+function buildPacketScoreLines(report: Record<string, any>) {
+  if (!report.packetScore) return [];
+  return ['', 'Packet review score:', buildPacketScoreText(report.packetScore)];
 }
 
 export function buildStandardizedLeadPacket(packet: ContractorLeadPacket) {
@@ -147,7 +133,8 @@ export function buildStandardizedLeadPacket(packet: ContractorLeadPacket) {
     `Air handler location: ${report.airHandlerLocation || 'Not provided'}`,
     `Location details: ${report.airHandlerLocationNotes || 'Not provided'}`,
     `Access notes: ${report.accessNotes || 'Not provided'}`,
-    ...buildContractorPacketLines(report), '',
+    ...buildContractorPacketLines(report),
+    ...buildPacketScoreLines(report), '',
     'Request:',
     'Please provide a ballpark estimate or next-step recommendation based on the information above. Final pricing can be confirmed after an in-person inspection.'
   ];
@@ -155,39 +142,20 @@ export function buildStandardizedLeadPacket(packet: ContractorLeadPacket) {
 }
 
 export function buildPhoneScript(packet: ContractorLeadPacket) {
-  return `Hi, I found your company through HVAC Truth. I am in ZIP ${packet.zipCode}. I need help with ${packet.serviceTypeLabel}. ${packet.symptomSummary} My system details, safe troubleshooting notes, safe photo status, and air handler location are available in a contractor-ready report. Can I send that over so you can give me a ballpark estimate before scheduling?`;
+  const scoreText = packet.reportSnapshot?.packetScore ? ` The packet score is ${packet.reportSnapshot.packetScore.percent}% (${packet.reportSnapshot.packetScore.contractorBadge}).` : '';
+  return `Hi, I found your company through HVAC Truth. I am in ZIP ${packet.zipCode}. I need help with ${packet.serviceTypeLabel}. ${packet.symptomSummary}${scoreText} My system details, safe troubleshooting notes, safe photo status, and air handler location are available in a contractor-ready report. Can I send that over so you can give me a ballpark estimate before scheduling?`;
 }
 
 export async function performContactRoute(route: ContractorContactRoute, leadText: string, phoneScript: string) {
-  if (route.preferredMethod === 'published_email' && route.destination) {
-    const subject = encodeURIComponent('HVAC service request with system details');
-    const body = encodeURIComponent(leadText);
-    await Linking.openURL(`mailto:${route.destination}?subject=${subject}&body=${body}`);
-    return 'email_prepared' as ContractorContactRouteStatus;
-  }
-  if (route.preferredMethod === 'phone' && route.destination) {
-    await Linking.openURL(`tel:${cleanPhone(route.destination)}`);
-    return 'call_started' as ContractorContactRouteStatus;
-  }
-  if (route.preferredMethod === 'sms' && route.destination) {
-    await Linking.openURL(`sms:${cleanPhone(route.destination)}?body=${encodeURIComponent(phoneScript)}`);
-    return 'sms_started' as ContractorContactRouteStatus;
-  }
-  if ((route.preferredMethod === 'website_contact_form' || route.preferredMethod === 'website' || route.preferredMethod === 'google_profile' || route.preferredMethod === 'yelp_profile') && route.destination) {
-    await Linking.openURL(route.destination);
-    return 'opened' as ContractorContactRouteStatus;
-  }
+  if (route.preferredMethod === 'published_email' && route.destination) { const subject = encodeURIComponent('HVAC service request with system details'); const body = encodeURIComponent(leadText); await Linking.openURL(`mailto:${route.destination}?subject=${subject}&body=${body}`); return 'email_prepared' as ContractorContactRouteStatus; }
+  if (route.preferredMethod === 'phone' && route.destination) { await Linking.openURL(`tel:${cleanPhone(route.destination)}`); return 'call_started' as ContractorContactRouteStatus; }
+  if (route.preferredMethod === 'sms' && route.destination) { await Linking.openURL(`sms:${cleanPhone(route.destination)}?body=${encodeURIComponent(phoneScript)}`); return 'sms_started' as ContractorContactRouteStatus; }
+  if ((route.preferredMethod === 'website_contact_form' || route.preferredMethod === 'website' || route.preferredMethod === 'google_profile' || route.preferredMethod === 'yelp_profile') && route.destination) { await Linking.openURL(route.destination); return 'opened' as ContractorContactRouteStatus; }
   await Share.share({ message: leadText });
   return 'shared' as ContractorContactRouteStatus;
 }
 
 export async function logContractorContactRoute(leadRequestId: string, contractorName: string, route: ContractorContactRoute, status: ContractorContactRouteStatus) {
-  const { error } = await supabase.from('contractor_lead_recipients').update({
-    delivery_method: route.preferredMethod,
-    delivery_destination: route.destination ?? null,
-    route_instructions: route.instructions,
-    homeowner_action_required: route.requiresHomeownerAction,
-    recipient_status: status
-  }).eq('lead_request_id', leadRequestId).eq('contractor_name', contractorName);
+  const { error } = await supabase.from('contractor_lead_recipients').update({ delivery_method: route.preferredMethod, delivery_destination: route.destination ?? null, route_instructions: route.instructions, homeowner_action_required: route.requiresHomeownerAction, recipient_status: status }).eq('lead_request_id', leadRequestId).eq('contractor_name', contractorName);
   if (error) throw error;
 }
