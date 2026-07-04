@@ -37,7 +37,7 @@ export type ContractorLeadRequestInput = {
   homeownerEmail?: string;
   attachContractorReport: boolean;
   selectedContractors: SelectedContractor[];
-  reportSnapshot?: Record<string, unknown>;
+  reportSnapshot?: Record<string, any>;
 };
 
 export type LeadRequestRecord = {
@@ -132,6 +132,30 @@ export function createContractorReportSnapshot(system: HvacSystemRecord | null, 
   };
 }
 
+function buildContractorPacketSummary(reportSnapshot?: Record<string, any>) {
+  const packet = reportSnapshot?.troubleshooting?.contractorPacket;
+  if (!packet) return [];
+
+  return [
+    '',
+    'Contractor packet intelligence:',
+    `Workflow: ${packet.workflowTitle ?? 'Not provided'}`,
+    `Severity explanation: ${packet.severityExplanation ?? 'Not provided'}`,
+    '',
+    'Professional verification focus:',
+    ...((packet.professionalVerificationFocus ?? []) as string[]).map((item) => `- ${item}`),
+    '',
+    'Homeowner safety boundary:',
+    ...((packet.homeownerSafetyBoundary ?? []) as string[]).map((item) => `- ${item}`),
+    '',
+    'Suggested safe photos:',
+    ...((packet.suggestedPhotoPrompts ?? []) as any[]).map((prompt) => `- ${prompt.label}: ${prompt.instruction}`),
+    '',
+    'Safe checklist status:',
+    ...((packet.safeChecklist ?? []) as any[]).map((item) => `- ${item.label} [${item.status}]: ${item.detail}`)
+  ];
+}
+
 export function buildLeadSummary(input: ContractorLeadRequestInput) {
   const service = SERVICE_TYPE_OPTIONS.find((option) => option.value === input.serviceType);
   const urgency = URGENCY_OPTIONS.find((option) => option.value === input.urgency);
@@ -156,6 +180,7 @@ export function buildLeadSummary(input: ContractorLeadRequestInput) {
     '',
     'Contractor context:',
     service?.contractorContext ?? 'Review request details and system report before scheduling.',
+    ...buildContractorPacketSummary(input.reportSnapshot),
     '',
     input.attachContractorReport ? 'Contractor-ready system report attached/included.' : 'Homeowner did not attach system report.'
   ].join('\n');
