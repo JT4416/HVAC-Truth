@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { getPrimarySystem, getProfile, HvacSystemRecord } from './profilePersistence';
 import { ContractorContactProfile } from './contractorContactRouting';
 import { buildVerifiedLeadRoutingDecisions, getContractorId, getLeadDeliveryRoute } from './verifiedLeadRouting';
+import { buildPacketScoreText } from './contractorPacketScoring';
 
 export type LeadServiceType =
   | 'no_cooling'
@@ -15,7 +16,6 @@ export type LeadServiceType =
 
 export type LeadUrgency = 'emergency_today' | 'within_24_hours' | 'this_week' | 'planning_ahead';
 export type ContactPreference = 'phone' | 'text' | 'email' | 'app_message';
-
 export type SelectedContractor = ContractorContactProfile & { id?: string; verified?: boolean; emergencyService?: boolean; };
 
 export type ContractorLeadRequestInput = {
@@ -123,6 +123,12 @@ function buildContractorPacketSummary(reportSnapshot?: Record<string, any>) {
   ];
 }
 
+function buildPacketScoreSummary(reportSnapshot?: Record<string, any>) {
+  const packetScore = reportSnapshot?.packetScore;
+  if (!packetScore) return [];
+  return ['', 'Packet review score:', buildPacketScoreText(packetScore)];
+}
+
 export function buildLeadSummary(input: ContractorLeadRequestInput) {
   const service = SERVICE_TYPE_OPTIONS.find((option) => option.value === input.serviceType);
   const urgency = URGENCY_OPTIONS.find((option) => option.value === input.urgency);
@@ -148,6 +154,7 @@ export function buildLeadSummary(input: ContractorLeadRequestInput) {
     'Contractor context:',
     service?.contractorContext ?? 'Review request details and system report before scheduling.',
     ...buildContractorPacketSummary(input.reportSnapshot),
+    ...buildPacketScoreSummary(input.reportSnapshot),
     '',
     input.attachContractorReport ? 'Contractor-ready system report attached/included.' : 'Homeowner did not attach system report.'
   ].join('\n');
