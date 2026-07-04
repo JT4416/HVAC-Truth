@@ -1,6 +1,6 @@
 # HVAC Truth MVP Starter
 
-HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, and contractor-ready photo packet handoffs.
+HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, contractor-ready photo packet handoffs, and packet completeness scoring.
 
 ## MVP Stack
 
@@ -28,9 +28,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V22 — Photo Capture for Contractor Packets**.
+Current stage: **V23 — Contractor Packet Review and Scoring**.
 
-The app now turns V21 safe photo prompts into actual homeowner controls. Homeowners can take/retake a photo, skip a prompt, mark it not applicable, or mark it unsafe to access. Attached photos and photo status are included in the contractor packet while keeping all homeowner guidance inside safe visual-observation boundaries.
+The app now scores contractor packet completeness before submission and shows the score in contractor dashboard lead detail. The score highlights missing high-value fields like contact path, air handler location, access notes, model/serial data, troubleshooting context, safe photo status, selected contractor, and safety-boundary visibility.
 
 ## Build History
 
@@ -362,11 +362,46 @@ Run:
 backend/supabase/migrations/20260704_v22_contractor_packet_photo_storage.sql
 ```
 
+### V23 — Contractor Packet Review and Scoring
+
+V23 scores contractor packet completeness before submission and inside contractor dashboard lead detail.
+
+New V23 files:
+
+```text
+app/src/services/contractorPacketScoring.ts
+docs/features/CONTRACTOR_PACKET_REVIEW_AND_SCORING.md
+docs/build/NEXT_BUILD_STEPS_V23.md
+```
+
+Updated V23 files:
+
+```text
+app/src/screens/ContractorLeadRequestScreen.tsx
+app/src/screens/ContractorLeadDetailScreen.tsx
+app/src/services/contractorLeadFlow.ts
+app/src/services/contractorContactRouting.ts
+README.md
+```
+
+V23 behavior:
+
+- Adds `buildContractorPacketScore(input)` and `buildPacketScoreText(score)`.
+- Shows a packet score card before homeowner lead submission.
+- Saves the final score in `reportSnapshot.packetScore`.
+- Adds contractor badges: `Complete`, `Strong`, `Needs details`, and `Thin`.
+- Shows missing high-value fields and warnings before submission.
+- Shows packet score, badge, missing fields, and full score details in contractor dashboard lead detail.
+- Adds packet score to saved lead summary and standardized contact packet text.
+- Adds score context to phone scripts.
+
+No new migration is required for V23.
+
 ## Next Recommended Build
 
-**V23 — Contractor Packet Review and Scoring**
+**V24 — Contractor Preference Rules**
 
-Add packet completeness scoring before submission and show a contractor dashboard badge for packet quality, missing high-value fields, and unsafe-access photo gaps.
+Let verified contractors define required packet fields by lead type, then use those preferences during routing and before homeowner submission.
 
 ## Active Repository
 
