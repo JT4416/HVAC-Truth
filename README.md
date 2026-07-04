@@ -100,7 +100,6 @@ Database additions are appended to:
 
 The decoder intentionally uses confidence scoring. Starter rules should be verified before the app makes high-confidence age or warranty-related claims.
 
-
 ## V5 Update - Supabase Auth + Real Profile Persistence
 
 V5 adds the first real persistence layer:
@@ -175,7 +174,6 @@ supabase functions deploy data-plate-ocr
 ```
 
 Run the updated SQL in `backend/supabase/schema.sql` before testing photo upload and OCR persistence.
-
 
 ## V7 Update - Contractor-Ready System Report
 
@@ -329,18 +327,70 @@ V10 keeps two systems separate:
 1. Contractor discovery: rating, review count, distance, provider source, ZIP code, and HVAC Truth trust score.
 2. Lead delivery: dashboard, email, contact form, website, phone, SMS, Google/Yelp profile, or no usable route.
 
-## GitHub Recommendation
+## V11 Update - Contractor Profile Claiming
 
-Create a private GitHub repository now and push V10 as the baseline.
+V11 lets contractors claim a profile and submit verification details.
 
-Recommended repo name:
+New V11 files:
 
 ```text
-hvac-truth-app
+app/src/screens/ContractorProfileClaimScreen.tsx
+app/src/services/contractorProfileClaiming.ts
+backend/supabase/migrations/20260703_v11_contractor_profile_claiming.sql
+docs/features/CONTRACTOR_PROFILE_CLAIMING.md
+docs/build/NEXT_BUILD_STEPS_V11.md
 ```
 
-See:
+Contractors can submit business information, authorized contact details, service ZIP codes, service radius, emergency service status, lead preferences, and review notes.
+
+## V12 Update - Contractor Dashboard
+
+V12 adds the verified contractor dashboard foundation.
+
+New V12 files:
 
 ```text
-docs/build/GITHUB_REPO_SETUP.md
+app/src/services/contractorDashboard.ts
+app/src/screens/ContractorDashboardScreen.tsx
+app/src/screens/ContractorLeadDetailScreen.tsx
+app/src/screens/ContractorLeadPreferencesScreen.tsx
+backend/supabase/migrations/20260703_v12_contractor_dashboard.sql
+docs/features/CONTRACTOR_DASHBOARD.md
+docs/build/NEXT_BUILD_STEPS_V12.md
+```
+
+Verified contractors can view dashboard-routed lead packets, open contractor-ready report snapshots, accept or decline leads, mark leads as scheduled, add internal notes, and review lead preferences.
+
+Direct dashboard leads require an active verified row in `contractor_dashboard_users`. Unverified contractors remain on V9 public-contact routing.
+
+## V13 Update - Contractor Claim Review
+
+V13 adds the internal review workflow that turns submitted contractor claims into verified contractor dashboard access.
+
+New V13 files:
+
+```text
+app/src/services/contractorClaimReview.ts
+app/src/screens/AdminContractorClaimReviewScreen.tsx
+app/src/screens/AdminContractorClaimDetailScreen.tsx
+backend/supabase/migrations/20260703_v13_contractor_claim_review.sql
+docs/features/CONTRACTOR_CLAIM_REVIEW.md
+docs/build/NEXT_BUILD_STEPS_V13.md
+```
+
+Reviewers can approve and verify, request more information, or reject a contractor claim. Approval creates or updates the contractor profile, marks the contractor as HVAC Truth verified, creates dashboard access, copies service areas, and copies lead preferences.
+
+Run the V13 migration, then bootstrap the first reviewer in Supabase:
+
+```sql
+insert into public.app_admin_users (user_id, role, active)
+values ('<profile_uuid>', 'owner', true);
+```
+
+## GitHub Recommendation
+
+The active repository for this build is:
+
+```text
+https://github.com/JT4416/HVAC-Truth
 ```
