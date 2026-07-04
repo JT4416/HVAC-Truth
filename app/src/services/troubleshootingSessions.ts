@@ -52,6 +52,30 @@ export type TroubleshootingLeadDefaults = {
   desiredOutcome: string;
 };
 
+export type ContractorPacketPhotoPrompt = {
+  id: string;
+  label: string;
+  instruction: string;
+  safetyNote: string;
+};
+
+export type ContractorPacketChecklistItem = {
+  label: string;
+  status: 'recorded' | 'not_recorded' | 'stopped_for_safety';
+  detail: string;
+};
+
+export type ContractorPacketIntelligence = {
+  workflowId: string;
+  workflowTitle: string;
+  severity: TroubleshootingResult['severity'];
+  severityExplanation: string;
+  professionalVerificationFocus: string[];
+  homeownerSafetyBoundary: string[];
+  suggestedPhotoPrompts: ContractorPacketPhotoPrompt[];
+  safeChecklist: ContractorPacketChecklistItem[];
+};
+
 export async function saveTroubleshootingSession(input: SaveTroubleshootingSessionInput) {
   const { data, error } = await supabase
     .from('troubleshooting_sessions')
@@ -263,6 +287,146 @@ export function buildLeadDefaultsFromTroubleshootingSession(session: Troubleshoo
   };
 }
 
+function basePhotoPrompts(): ContractorPacketPhotoPrompt[] {
+  return [
+    {
+      id: 'thermostat-screen',
+      label: 'Thermostat screen',
+      instruction: 'Photo of the thermostat display showing mode, setpoint, and room temperature.',
+      safetyNote: 'Do not remove the thermostat from the wall or open any wiring.'
+    },
+    {
+      id: 'outdoor-unit-clearance',
+      label: 'Outdoor unit clearance',
+      instruction: 'Photo of the outdoor unit from a safe distance showing airflow clearance around the cabinet.',
+      safetyNote: 'Do not remove panels or reach inside the unit.'
+    },
+    {
+      id: 'filter-area-exterior',
+      label: 'Filter area exterior',
+      instruction: 'Photo of the filter grille or accessible filter slot exterior only.',
+      safetyNote: 'Only photograph accessible areas. Do not open equipment compartments.'
+    }
+  ];
+}
+
+export function getSuggestedPhotoPromptsForWorkflow(workflowId?: string): ContractorPacketPhotoPrompt[] {
+  switch (workflowId) {
+    case 'both-indoor-outdoor-off-drain-float':
+      return [
+        ...basePhotoPrompts(),
+        { id: 'air-handler-area', label: 'Air handler area', instruction: 'Photo of the air handler location and nearby drain/pan area if visible.', safetyNote: 'Do not open panels or bypass float/pan switches.' },
+        { id: 'drain-termination', label: 'Drain termination', instruction: 'Photo of the visible condensate drain termination if easily accessible.', safetyNote: 'Do not cut, disconnect, or alter piping.' }
+      ];
+    case 'water-leak-drain-pan':
+      return [
+        { id: 'visible-water', label: 'Visible water', instruction: 'Photo of visible water near the unit, pan, ceiling, wall, or floor.', safetyNote: 'Avoid standing water near electrical equipment.' },
+        { id: 'emergency-pan', label: 'Emergency pan', instruction: 'Photo of the emergency pan if visible without opening equipment.', safetyNote: 'Do not bypass pan switches or float switches.' },
+        { id: 'drain-termination', label: 'Drain termination', instruction: 'Photo of the drain outlet if safely accessible.', safetyNote: 'Do not modify drain piping.' }
+      ];
+    case 'frozen-coil-airflow':
+      return [
+        ...basePhotoPrompts(),
+        { id: 'ice-visible', label: 'Visible ice', instruction: 'Photo of visible ice/frost from outside the cabinet only.', safetyNote: 'Do not chip ice, open panels, or force the system to run.' },
+        { id: 'return-grille', label: 'Return grille', instruction: 'Photo of the return grille and filter area exterior.', safetyNote: 'Do not remove blower access panels.' }
+      ];
+    case 'no-cooling-warm-air':
+      return [
+        ...basePhotoPrompts(),
+        { id: 'supply-vent', label: 'Supply vent airflow', instruction: 'Photo of a representative supply vent and room thermostat reading.', safetyNote: 'Do not access duct interiors.' }
+      ];
+    case 'quote-validation-safe':
+      return [
+        { id: 'quote-document', label: 'Quote document', instruction: 'Photo or upload of the written quote, scope, or invoice.', safetyNote: 'Hide payment details or unrelated personal information.' },
+        { id: 'model-serial-plates', label: 'Equipment data plates', instruction: 'Photos of indoor/outdoor data plates if accessible without opening electrical compartments.', safetyNote: 'Do not remove covers to reach a data plate.' }
+      ];
+    default:
+      return basePhotoPrompts();
+  }
+}
+
+export function getProfessionalVerificationFocusForWorkflow(workflowId?: string) {
+  switch (workflowId) {
+    case 'both-indoor-outdoor-off-drain-float':
+      return ['Control voltage path', 'Thermostat call', 'Float or pan switch status', 'Condensate drain/pan condition', 'Safe restoration without bypassing safeties'];
+    case 'water-leak-drain-pan':
+      return ['Condensate drain restriction', 'Trap and slope condition', 'Emergency pan condition', 'Float/pan switch operation', 'Water damage risk'];
+    case 'frozen-coil-airflow':
+      return ['Airflow restrictions', 'Filter and coil condition', 'Blower operation', 'Refrigerant-side diagnostics by licensed technician', 'Restart timing after thaw'];
+    case 'no-cooling-warm-air':
+      return ['Thermostat call', 'Indoor airflow', 'Outdoor unit operation', 'Refrigerant-side diagnostics by licensed technician', 'Temperature split after safe restart'];
+    case 'quote-validation-safe':
+      return ['Quoted scope accuracy', 'Part and labor reasonableness', 'Replacement vs repair logic', 'Code or permit implications', 'Second-opinion documentation'];
+    case 'noise-vibration':
+      return ['Source of sound', 'Fan/motor/compressor condition', 'Loose panels or mounting', 'Duct vibration', 'Safe operation assessment'];
+    default:
+      return ['Confirm homeowner observations', 'Verify system access', 'Perform licensed diagnostic work', 'Provide repair or estimate recommendation'];
+  }
+}
+
+export function getSeverityExplanation(severity: TroubleshootingSessionRecord['severity']) {
+  switch (severity) {
+    case 'urgent-stop':
+      return 'HVAC Truth advised the homeowner to stop and request professional help because the situation may involve equipment protection, water risk, electrical risk, or another safety boundary.';
+    case 'call-pro':
+      return 'HVAC Truth found homeowner-safe checks were not enough to resolve or explain the issue, so the next step is professional diagnosis.';
+    case 'caution':
+      return 'HVAC Truth allowed only limited homeowner-safe observation or maintenance steps and preserved a contractor handoff if symptoms continue.';
+    case 'safe-check':
+    default:
+      return 'HVAC Truth provided homeowner-safe checks only and did not authorize electrical, refrigerant, gas, combustion, or disassembly work.';
+  }
+}
+
+export function buildContractorPacketIntelligence(session?: TroubleshootingSessionRecord | null): ContractorPacketIntelligence | null {
+  if (!session) return null;
+
+  return {
+    workflowId: session.workflow_id,
+    workflowTitle: session.workflow_title,
+    severity: session.severity,
+    severityExplanation: getSeverityExplanation(session.severity),
+    professionalVerificationFocus: getProfessionalVerificationFocusForWorkflow(session.workflow_id),
+    homeownerSafetyBoundary: session.do_not_do ?? [],
+    suggestedPhotoPrompts: getSuggestedPhotoPromptsForWorkflow(session.workflow_id),
+    safeChecklist: [
+      ...(session.safe_steps ?? []).map((step) => ({
+        label: step.title,
+        status: 'recorded' as const,
+        detail: step.detail
+      })),
+      ...((session.call_pro_when ?? []).length ? [{
+        label: 'Safety stop / call-a-pro trigger',
+        status: 'stopped_for_safety' as const,
+        detail: (session.call_pro_when ?? []).join(' ')
+      }] : [])
+    ]
+  };
+}
+
+export function buildContractorPacketPreview(session?: TroubleshootingSessionRecord | null) {
+  const intelligence = buildContractorPacketIntelligence(session);
+  if (!intelligence) return 'No contractor packet intelligence available until a troubleshooting session is selected.';
+
+  return [
+    'Contractor packet intelligence:',
+    `Workflow: ${intelligence.workflowTitle}`,
+    `Severity explanation: ${intelligence.severityExplanation}`,
+    '',
+    'Professional verification focus:',
+    ...intelligence.professionalVerificationFocus.map((item) => `- ${item}`),
+    '',
+    'Homeowner safety boundary:',
+    ...intelligence.homeownerSafetyBoundary.map((item) => `- ${item}`),
+    '',
+    'Suggested safe photos before submission:',
+    ...intelligence.suggestedPhotoPrompts.map((prompt) => `- ${prompt.label}: ${prompt.instruction} Safety: ${prompt.safetyNote}`),
+    '',
+    'Safe checklist status:',
+    ...intelligence.safeChecklist.map((item) => `- ${item.label} [${item.status}]: ${item.detail}`)
+  ].join('\n');
+}
+
 export function buildTroubleshootingReportText(session?: TroubleshootingSessionRecord | null) {
   if (!session) return 'No saved troubleshooting session attached.';
 
@@ -278,7 +442,9 @@ export function buildTroubleshootingReportText(session?: TroubleshootingSessionR
     ...(session.contractor_report_notes ?? []).map((note) => `- ${note}`),
     '',
     'Call-a-pro triggers:',
-    ...(session.call_pro_when ?? []).map((note) => `- ${note}`)
+    ...(session.call_pro_when ?? []).map((note) => `- ${note}`),
+    '',
+    buildContractorPacketPreview(session)
   ].join('\n');
 }
 
@@ -296,6 +462,7 @@ export function buildTroubleshootingSnapshot(session?: TroubleshootingSessionRec
     callProWhen: session.call_pro_when,
     homeownerScript: session.homeowner_script,
     contractorReportNotes: session.contractor_report_notes,
+    contractorPacket: buildContractorPacketIntelligence(session),
     homeownerLabel: session.homeowner_label,
     createdAt: session.created_at
   };
@@ -313,6 +480,8 @@ export function buildLeadPacketPreview(session?: TroubleshootingSessionRecord | 
     session.homeowner_script ?? 'Not provided',
     '',
     'Contractor notes:',
-    ...(session.contractor_report_notes ?? []).map((note) => `- ${note}`)
+    ...(session.contractor_report_notes ?? []).map((note) => `- ${note}`),
+    '',
+    buildContractorPacketPreview(session)
   ].join('\n');
 }
