@@ -53,6 +53,53 @@ alter table public.contractor_availability_windows enable row level security;
 create policy "Users can read their own contractor dashboard access" on public.contractor_dashboard_users
   for select using (auth.uid() = user_id);
 
+create policy "Verified dashboard users can read routed lead recipients" on public.contractor_lead_recipients
+  for select using (
+    exists (
+      select 1 from public.contractor_dashboard_users cdu
+      where cdu.contractor_id = contractor_lead_recipients.contractor_id
+        and cdu.user_id = auth.uid()
+        and cdu.dashboard_status = 'active'
+        and cdu.verification_status = 'verified'
+        and contractor_lead_recipients.delivery_method = 'verified_dashboard'
+    )
+  );
+
+create policy "Verified dashboard users can update routed lead recipients" on public.contractor_lead_recipients
+  for update using (
+    exists (
+      select 1 from public.contractor_dashboard_users cdu
+      where cdu.contractor_id = contractor_lead_recipients.contractor_id
+        and cdu.user_id = auth.uid()
+        and cdu.dashboard_status = 'active'
+        and cdu.verification_status = 'verified'
+        and contractor_lead_recipients.delivery_method = 'verified_dashboard'
+    )
+  ) with check (
+    exists (
+      select 1 from public.contractor_dashboard_users cdu
+      where cdu.contractor_id = contractor_lead_recipients.contractor_id
+        and cdu.user_id = auth.uid()
+        and cdu.dashboard_status = 'active'
+        and cdu.verification_status = 'verified'
+        and contractor_lead_recipients.delivery_method = 'verified_dashboard'
+    )
+  );
+
+create policy "Verified dashboard users can read routed lead requests" on public.contractor_lead_requests
+  for select using (
+    exists (
+      select 1
+      from public.contractor_lead_recipients clr
+      join public.contractor_dashboard_users cdu on cdu.contractor_id = clr.contractor_id
+      where clr.lead_request_id = contractor_lead_requests.id
+        and clr.delivery_method = 'verified_dashboard'
+        and cdu.user_id = auth.uid()
+        and cdu.dashboard_status = 'active'
+        and cdu.verification_status = 'verified'
+    )
+  );
+
 create policy "Verified dashboard users can read lead activity" on public.contractor_lead_activity
   for select using (
     exists (
