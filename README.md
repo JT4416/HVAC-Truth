@@ -29,9 +29,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V30 — Staging Validation and Claim Approval Test Harness**.
+Current stage: **V31 — Claim Approval Harness Expansion and App Read Verification**.
 
-V30 adds a rollback-safe Supabase SQL harness that validates the V29 claim review delivery-method write-through flow. The harness approves a synthetic contractor claim, verifies `contractor_delivery_methods`, verifies legacy `contractor_lead_preferences`, checks destination mapping, confirms dashboard access, and rolls back by default.
+V31 expands V30 with SQL negative-path coverage for claim review approval and adds app-side delivery-method read verification helpers. The app delivery-method service now reports whether rows came from the new `contractor_delivery_methods` table or the legacy `contractor_lead_preferences` fallback path.
 
 ## Core Marketplace Rule
 
@@ -255,26 +255,41 @@ values ('<profile_uuid>', 'owner', true);
 
 ### V30 — Staging Validation and Claim Approval Test Harness
 
-New V30 files:
+- Added `backend/supabase/tests/v30_claim_review_delivery_method_write_through_test.sql`
+- Added `docs/build/V30_STAGING_VALIDATION_AND_TEST_HARNESS.md`
+- Added rollback-safe positive-path SQL harness for local/staging Supabase validation
+- Validates contractor verification, dashboard access, service areas, new delivery-method rows, legacy compatibility rows, and destination mapping
+
+### V31 — Claim Approval Harness Expansion and App Read Verification
+
+New V31 files:
 
 ```text
-backend/supabase/tests/v30_claim_review_delivery_method_write_through_test.sql
-docs/build/V30_STAGING_VALIDATION_AND_TEST_HARNESS.md
+backend/supabase/tests/v31_claim_review_negative_paths_and_read_verification.sql
+app/src/services/contractorDeliveryMethods.fixture.ts
+docs/build/V31_CLAIM_APPROVAL_HARNESS_EXPANSION_AND_APP_READ_VERIFICATION.md
 ```
 
-V30 behavior:
+Updated V31 files:
 
-- Adds a rollback-safe SQL harness for local/staging Supabase validation.
-- Requires two existing `public.profiles.id` UUIDs: reviewer and contractor user.
-- Promotes the reviewer profile to an owner inside the transaction.
-- Creates and approves a synthetic contractor claim covering dashboard, email, phone, SMS, and website form delivery methods.
-- Asserts contractor verification, dashboard access, service areas, new delivery-method rows, legacy compatibility rows, and destination mapping.
-- Ends with `rollback;` by default so it is repeatable.
+```text
+app/src/services/contractorDeliveryMethods.ts
+README.md
+```
+
+V31 behavior:
+
+- Adds negative-path SQL harness checks for unauthorized reviewer, invalid decision, and missing claim.
+- Runs a positive claim approval after negative-path checks.
+- Verifies new delivery-method rows are available from `contractor_delivery_methods`.
+- Keeps the rollback-safe harness pattern.
+- Adds app-side read result source metadata: `contractor_delivery_methods` or `contractor_lead_preferences`.
+- Adds a typechecked fixture that validates preferred new-table reads, legacy fallback normalization, and delivery-method summary formatting.
 
 Run after V29 in a local, staging, or clean Supabase branch:
 
 ```bash
-psql "$SUPABASE_DB_URL" -f backend/supabase/tests/v30_claim_review_delivery_method_write_through_test.sql
+psql "$SUPABASE_DB_URL" -f backend/supabase/tests/v31_claim_review_negative_paths_and_read_verification.sql
 ```
 
 Or paste the script into Supabase SQL editor after replacing the placeholder profile UUIDs.
@@ -294,13 +309,13 @@ Run Supabase migrations in a clean branch or staging project before production.
 
 ## Next Recommended Build
 
-**V31 — Claim Approval Harness Expansion and App Read Verification**
+**V32 — Contractor Dashboard Delivery Method UI Source Visibility**
 
 Recommended next work:
 
-- Add negative-path harness cases for unauthorized reviewer, invalid decision, and missing claim.
-- Add read-path verification for `getContractorDeliveryMethods(contractorId)` behavior.
-- Add an app-side or fixture-level check confirming new delivery rows are preferred before legacy fallback.
+- Surface delivery method source metadata in admin/debug copy for verified contractor delivery-method reads.
+- Add UI-safe handling for empty new-table reads versus true fallback errors.
+- Add clearer validation copy for staging claim approval tests.
 - Run local `npm run typecheck` and Expo validation.
 
 ## Active Repository
