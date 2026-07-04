@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getContractorDeliveryMethods } from './contractorDeliveryMethods';
 
 export type ContractorDashboardUser = {
   id: string;
@@ -150,7 +151,7 @@ export async function updateContractorLeadStatus(
 export async function recordContractorLeadActivity(
   contractorId: string,
   leadRequestId: string,
-  activityType: 'viewed' | 'accepted' | 'declined' | 'scheduled' | 'note_added' | 'preferences_updated',
+  activityType: 'viewed' | 'accepted' | 'declined' | 'scheduled' | 'note_added' | 'delivery_methods_updated',
   activitySummary?: string
 ) {
   const { data: sessionData } = await supabase.auth.getUser();
@@ -200,15 +201,12 @@ export async function addContractorLeadNote(contractorId: string, leadRequestId:
   return { data, error };
 }
 
-export async function getContractorLeadPreferences(contractorId: string) {
-  const { data, error } = await supabase
-    .from('contractor_lead_preferences')
-    .select('*')
-    .eq('contractor_id', contractorId)
-    .eq('active', true)
-    .order('created_at', { ascending: true });
+export async function getContractorDashboardDeliveryMethods(contractorId: string) {
+  return getContractorDeliveryMethods(contractorId);
+}
 
-  return { data: data || [], error };
+export async function getContractorLeadPreferences(contractorId: string) {
+  return getContractorDeliveryMethods(contractorId);
 }
 
 export async function getContractorAvailabilityWindows(contractorId: string) {
