@@ -10,6 +10,7 @@ import {
   getContractorDashboardLead,
   updateContractorLeadStatus
 } from '../services/contractorDashboard';
+import { buildPacketScoreText } from '../services/contractorPacketScoring';
 
 export default function ContractorLeadDetailScreen({ route, navigation }: any) {
   const leadId = route.params?.leadId;
@@ -63,11 +64,19 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
   const packet = troubleshooting?.contractorPacket;
   const photoAttachments = (packet?.photoAttachments ?? []) as any[];
   const photoSummary = packet?.photoAttachmentSummary;
+  const packetScore = (report as any).packetScore;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Lead Packet</Text>
       <Text style={styles.subtitle}>{formatLeadServiceType(lead.serviceType)} • {formatLeadUrgency(lead.urgency)}</Text>
+
+      <View style={styles.scoreCard}>
+        <Text style={styles.scoreTitle}>Packet score: {packetScore ? `${packetScore.percent}%` : 'Not scored'}</Text>
+        <Text style={styles.scoreBadge}>Badge: {packetScore?.contractorBadge ?? 'No badge'}</Text>
+        <Text style={styles.value}>{packetScore?.summary ?? 'No packet review score was saved with this lead.'}</Text>
+        {packetScore?.missingHighValueFields?.length ? <Text style={styles.warning}>Missing: {packetScore.missingHighValueFields.join(', ')}</Text> : null}
+      </View>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Homeowner request</Text>
@@ -131,16 +140,12 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
         <Text style={styles.sectionTitle}>Safe photo attachments</Text>
         {photoSummary ? <Text style={styles.value}>Attached: {photoSummary.attached} • Skipped: {photoSummary.skipped} • N/A: {photoSummary.notApplicable} • Unsafe access: {photoSummary.blocked} • Still needed: {photoSummary.needed}</Text> : null}
         {!photoAttachments.length ? <Text style={styles.helper}>No photo attachment status was included with this lead.</Text> : null}
-        {photoAttachments.map((photo) => (
-          <View key={photo.promptId} style={styles.photoRow}>
-            <Text style={styles.label}>{photo.promptLabel}</Text>
-            <Text style={styles.value}>Status: {photo.status}{photo.skippedReason ? ` — ${photo.skippedReason}` : ''}</Text>
-            <Text style={styles.helper}>{photo.instruction}</Text>
-            <Text style={styles.warning}>Safety: {photo.safetyNote}</Text>
-            {photo.signedUrl ? <Image source={{ uri: photo.signedUrl }} style={styles.photoPreview} /> : null}
-            {photo.storagePath ? <Text style={styles.helper}>Stored: {photo.storageBucket}/{photo.storagePath}</Text> : null}
-          </View>
-        ))}
+        {photoAttachments.map((photo) => <View key={photo.promptId} style={styles.photoRow}><Text style={styles.label}>{photo.promptLabel}</Text><Text style={styles.value}>Status: {photo.status}{photo.skippedReason ? ` — ${photo.skippedReason}` : ''}</Text><Text style={styles.helper}>{photo.instruction}</Text><Text style={styles.warning}>Safety: {photo.safetyNote}</Text>{photo.signedUrl ? <Image source={{ uri: photo.signedUrl }} style={styles.photoPreview} /> : null}{photo.storagePath ? <Text style={styles.helper}>Stored: {photo.storageBucket}/{photo.storagePath}</Text> : null}</View>)}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Packet score detail</Text>
+        <Text style={styles.value}>{buildPacketScoreText(packetScore)}</Text>
       </View>
 
       <View style={styles.card}>
@@ -166,6 +171,9 @@ const styles = StyleSheet.create({
   container: { padding: 20, paddingBottom: 44, backgroundColor: '#F8FAFC' },
   title: { fontSize: 30, fontWeight: '900', color: '#0F172A', marginBottom: 8 },
   subtitle: { fontSize: 16, color: '#475569', marginBottom: 18, lineHeight: 22 },
+  scoreCard: { backgroundColor: '#EEF2FF', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#C7D2FE' },
+  scoreTitle: { fontSize: 18, fontWeight: '900', color: '#312E81', marginBottom: 4 },
+  scoreBadge: { color: '#4338CA', fontWeight: '900', marginBottom: 6 },
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 10 },
   label: { fontSize: 13, fontWeight: '800', color: '#64748B', marginTop: 10, textTransform: 'uppercase' },
