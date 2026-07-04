@@ -27,9 +27,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V19 — Troubleshooting Session Controls**.
+Current stage: **V20 — Troubleshooting to Lead Conversion**.
 
-The app now lets homeowners manage saved troubleshooting sessions, choose whether they appear in contractor reports or lead packets, archive old sessions, preview contractor-facing troubleshooting context, and select a specific saved troubleshooting session during lead request submission.
+The app now lets homeowners complete a safe troubleshooting workflow and move directly into a contractor lead request. The lead request opens with the saved troubleshooting session preselected, troubleshooting attachment enabled, and service type, urgency, symptom summary, and desired outcome prefilled from the workflow result.
 
 ## Build History
 
@@ -252,11 +252,46 @@ Run after V17 migration:
 backend/supabase/migrations/20260703_v19_troubleshooting_session_controls.sql
 ```
 
+### V20 — Troubleshooting to Lead Conversion
+
+V20 lets a completed or saved troubleshooting workflow directly start a contractor lead request.
+
+New V20 files:
+
+```text
+docs/features/TROUBLESHOOTING_TO_LEAD_CONVERSION.md
+docs/build/NEXT_BUILD_STEPS_V20.md
+```
+
+Updated V20 files:
+
+```text
+app/App.tsx
+app/src/screens/TroubleshootingScreen.tsx
+app/src/screens/TroubleshootingSessionDetailScreen.tsx
+app/src/screens/ContractorLeadRequestScreen.tsx
+app/src/services/troubleshootingSessions.ts
+README.md
+```
+
+V20 behavior:
+
+- Adds **I Tried This, Now Request Help** after completed troubleshooting results.
+- Saves the troubleshooting session during direct conversion when needed.
+- Adds the same direct lead action from saved troubleshooting session detail.
+- Routes to `ContractorLeadRequest` with `troubleshootingSessionId` and `leadDefaults`.
+- Prefills service type, urgency, symptom summary, and desired outcome from the troubleshooting session.
+- Preselects the saved troubleshooting session and enables lead packet attachment.
+- Lets homeowners use any selected troubleshooting session to refill lead details.
+- Keeps all homeowner safety boundaries unchanged.
+
+No new migration is required for V20.
+
 ## Next Recommended Build
 
-**V20 — Troubleshooting to Lead Conversion**
+**V21 — Contractor Packet Intelligence**
 
-Allow a completed troubleshooting workflow to start a contractor lead request directly, pre-fill service type and symptom summary, and preselect the saved troubleshooting session.
+Make contractor lead packets workflow-specific, add contractor-facing severity explanations, and add homeowner-safe photo prompts before lead submission.
 
 ## Active Repository
 
