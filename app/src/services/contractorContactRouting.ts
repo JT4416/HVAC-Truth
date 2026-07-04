@@ -164,6 +164,30 @@ export function detectContractorContactRoute(contractor: ContractorContactProfil
   };
 }
 
+function buildContractorPacketLines(report: Record<string, any>) {
+  const packet = report.troubleshooting?.contractorPacket;
+  if (!packet) return [];
+
+  return [
+    '',
+    'Troubleshooting and contractor packet intelligence:',
+    `Workflow: ${packet.workflowTitle || 'Not provided'}`,
+    `Severity explanation: ${packet.severityExplanation || 'Not provided'}`,
+    '',
+    'Professional verification focus:',
+    ...((packet.professionalVerificationFocus ?? []) as string[]).map((item) => `- ${item}`),
+    '',
+    'Homeowner was told NOT to do:',
+    ...((packet.homeownerSafetyBoundary ?? []) as string[]).map((item) => `- ${item}`),
+    '',
+    'Suggested safe photos for homeowner before visit:',
+    ...((packet.suggestedPhotoPrompts ?? []) as any[]).map((prompt) => `- ${prompt.label}: ${prompt.instruction} Safety: ${prompt.safetyNote}`),
+    '',
+    'Safe checklist status:',
+    ...((packet.safeChecklist ?? []) as any[]).map((item) => `- ${item.label} [${item.status}]: ${item.detail}`)
+  ];
+}
+
 export function buildStandardizedLeadPacket(packet: ContractorLeadPacket) {
   const report = packet.reportSnapshot ?? {};
   const lines = [
@@ -200,6 +224,7 @@ export function buildStandardizedLeadPacket(packet: ContractorLeadPacket) {
     `Air handler location: ${report.airHandlerLocation || 'Not provided'}`,
     `Location details: ${report.airHandlerLocationNotes || 'Not provided'}`,
     `Access notes: ${report.accessNotes || 'Not provided'}`,
+    ...buildContractorPacketLines(report),
     '',
     'Request:',
     'Please provide a ballpark estimate or next-step recommendation based on the information above. Final pricing can be confirmed after an in-person inspection.'
@@ -209,7 +234,7 @@ export function buildStandardizedLeadPacket(packet: ContractorLeadPacket) {
 }
 
 export function buildPhoneScript(packet: ContractorLeadPacket) {
-  return `Hi, I found your company through HVAC Truth. I am in ZIP ${packet.zipCode}. I need help with ${packet.serviceTypeLabel}. ${packet.symptomSummary} My system details and air handler location are available in a contractor-ready report. Can I send that over so you can give me a ballpark estimate before scheduling?`;
+  return `Hi, I found your company through HVAC Truth. I am in ZIP ${packet.zipCode}. I need help with ${packet.serviceTypeLabel}. ${packet.symptomSummary} My system details, safe troubleshooting notes, and air handler location are available in a contractor-ready report. Can I send that over so you can give me a ballpark estimate before scheduling?`;
 }
 
 export async function performContactRoute(route: ContractorContactRoute, leadText: string, phoneScript: string) {
@@ -220,50 +245,37 @@ export async function performContactRoute(route: ContractorContactRoute, leadTex
     return 'email_prepared' as ContractorContactRouteStatus;
   }
 
-  if ((route.preferredMethod === 'website_contact_form' || route.preferredMethod === 'website' || route.preferredMethod === 'google_profile' || route.preferredMethod === 'yelp_profile') && route.destination) {
-    await Linking.openURL(route.destination);
-    await Share.share({ message: leadText });
-    return 'opened' as ContractorContactRouteStatus;
-  }
-
   if (route.preferredMethod === 'phone' && route.destination) {
-    const phone = cleanPhone(route.destination);
-    await Linking.openURL(`tel:${phone}`);
-    await Share.share({ message: phoneScript });
+    await Linking.openURL(`tel:${cleanPhone(route.destination)}`);
     return 'call_started' as ContractorContactRouteStatus;
   }
 
   if (route.preferredMethod === 'sms' && route.destination) {
-    const phone = cleanPhone(route.destination);
-    await Linking.openURL(`sms:${phone}?body=${encodeURIComponent(phoneScript)}`);
+    await Linking.openURL(`sms:${cleanPhone(route.destination)}?body=${encodeURIComponent(phoneScript)}`);
     return 'sms_started' as ContractorContactRouteStatus;
+  }
+
+  if ((route.preferredMethod === 'website_contact_form' || route.preferredMethod === 'website' || route.preferredMethod === 'google_profile' || route.preferredMethod === 'yelp_profile') && route.destination) {
+    await Linking.openURL(route.destination);
+    return 'opened' as ContractorContactRouteStatus;
   }
 
   await Share.share({ message: leadText });
   return 'shared' as ContractorContactRouteStatus;
 }
 
-export async function saveContactRoutingSnapshot(params: {
-  userId: string;
-  leadRequestId: string;
-  contractorName: string;
-  route: ContractorContactRoute;
-  leadText: string;
-  status?: ContractorContactRouteStatus;
-}) {
-  const { error } = await supabase.from('contractor_contact_routes').insert({
-    user_id: params.userId,
-    lead_request_id: params.leadRequestId,
-    contractor_name: params.contractorName,
-    preferred_method: params.route.preferredMethod,
-    fallback_methods: params.route.fallbackMethods,
-    destination: params.route.destination ?? null,
-    route_label: params.route.label,
-    route_instructions: params.route.instructions,
-    can_auto_send: params.route.canAutoSend,
-    requires_homeowner_action: params.route.requiresHomeownerAction,
-    prepared_message: params.leadText,
-    route_status: params.status ?? 'prepared'
-  });
+export async function logContractorContactRoute(leadRequestId: string, contractorName: string, route: ContractorContactRoute, status: ContractorContactRouteStatus) {
+  const { error } = await supabase
+    .from('contractor_lead_recipients')
+    .update({
+      delivery_method: route.preferredMethod,
+      delivery_destination: route.destination ?? null,
+      route_instructions: route.instructions,
+      homeowner_action_required: route.requiresHomeownerAction,
+      recipient_status: status
+    })
+    .eq('lead_request_id', leadRequestId)
+    .eq('contractor_name', contractorName);
+
   if (error) throw error;
 }
