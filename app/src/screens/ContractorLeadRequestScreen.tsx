@@ -16,6 +16,7 @@ import {
 } from '../services/contractorLeadFlow';
 import { HvacSystemRecord } from '../services/profilePersistence';
 import { buildPhoneScript, buildStandardizedLeadPacket, detectContractorContactRoute, performContactRoute } from '../services/contractorContactRouting';
+import { buildVerifiedLeadRoutingDecisions, getDashboardRoutingSummary } from '../services/verifiedLeadRouting';
 
 const CONTACT_OPTIONS: { label: string; value: ContactPreference }[] = [
   { label: 'Phone', value: 'phone' },
@@ -84,6 +85,16 @@ export default function ContractorLeadRequestScreen({ navigation }: any) {
     [selectedKeys]
   );
 
+  const routingDecisions = useMemo(
+    () => buildVerifiedLeadRoutingDecisions(selectedContractors),
+    [selectedContractors]
+  );
+
+  const routingSummary = useMemo(
+    () => getDashboardRoutingSummary(routingDecisions),
+    [routingDecisions]
+  );
+
   const leadPreview = useMemo(() => buildLeadSummary({
     userId: user?.id ?? '',
     hvacSystemId: system?.id,
@@ -136,7 +147,7 @@ export default function ContractorLeadRequestScreen({ navigation }: any) {
         selectedContractors,
         reportSnapshot: attachReport ? reportSnapshot : {}
       });
-      Alert.alert('Request submitted', `Your request was created with status: ${request.lead_status}.`, [
+      Alert.alert('Request submitted', `${routingSummary.summary}\n\nLead status: ${request.lead_status}.`, [
         { text: 'Back Home', onPress: () => navigation.navigate('Home') },
         { text: 'OK' }
       ]);
@@ -232,16 +243,22 @@ This preview will open the available contact route or share sheet for the first 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>4. Choose contractors</Text>
         <Text style={styles.helper}>MVP demo list. Later this will pull live contractors by ZIP code, license status, review quality, service radius, and response history.</Text>
+        <View style={styles.routingSummaryCard}>
+          <Text style={styles.routingSummaryTitle}>Verified routing preview</Text>
+          <Text style={styles.routeHelper}>{routingSummary.summary}</Text>
+        </View>
         {DEMO_CONTRACTORS.map((contractor) => {
           const selected = selectedKeys.includes(contractorKey(contractor));
-          const route = detectContractorContactRoute(contractor);
+          const decision = buildVerifiedLeadRoutingDecisions([contractor])[0];
+          const route = decision.route;
           return (
             <Pressable key={contractorKey(contractor)} style={[styles.contractorCard, selected && styles.contractorCardSelected]} onPress={() => toggleContractor(contractor)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.contractorName}>{contractor.businessName}</Text>
                 <Text style={styles.contractorMeta}>★ {contractor.rating} ({contractor.reviewCount} reviews) • {contractor.distanceMiles} mi</Text>
                 <Text style={styles.badges}>{contractor.verified ? 'License verified' : 'License not verified'} • {contractor.emergencyService ? 'Emergency service' : 'Standard hours'}</Text>
-                <Text style={styles.routeText}>Best route: {route.label}</Text>
+                <Text style={decision.dashboardReady ? styles.dashboardRouteText : styles.routeText}>Best route: {route.label}</Text>
+                <Text style={styles.routeHelper}>{decision.reason}</Text>
                 <Text style={styles.routeHelper}>{route.instructions}</Text>
               </View>
               <Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected' : 'Select'}</Text>
@@ -308,6 +325,8 @@ const styles = StyleSheet.create({
   reportCard: { backgroundColor: '#EFF6FF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 6 },
   reportTitle: { color: '#0F2E5F', fontWeight: '900', marginBottom: 8 },
   reportLine: { color: '#334155', fontWeight: '700', marginBottom: 4 },
+  routingSummaryCard: { backgroundColor: '#F0FDF4', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 10 },
+  routingSummaryTitle: { color: '#14532D', fontWeight: '900', marginBottom: 4 },
   contractorCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, marginTop: 10 },
   contractorCardSelected: { borderColor: '#0B66E4', backgroundColor: '#EFF6FF' },
   contractorName: { color: '#0F2E5F', fontWeight: '900', fontSize: 16, marginBottom: 4 },
@@ -318,6 +337,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#0B66E4'
+  },
+  dashboardRouteText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#15803D'
   },
   routeHelper: {
     marginTop: 4,
