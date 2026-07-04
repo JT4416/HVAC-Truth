@@ -15,8 +15,9 @@ import {
   submitContractorLeadRequest
 } from '../services/contractorLeadFlow';
 import { HvacSystemRecord } from '../services/profilePersistence';
-import { buildPhoneScript, buildStandardizedLeadPacket, detectContractorContactRoute, performContactRoute } from '../services/contractorContactRouting';
-import { buildVerifiedLeadRoutingDecisions, getDashboardRoutingSummary } from '../services/verifiedLeadRouting';
+import { buildPhoneScript, buildStandardizedLeadPacket, performContactRoute } from '../services/contractorContactRouting';
+import { buildVerifiedLeadRoutingDecisions, getDashboardRoutingSummary, getLeadDeliveryRoute } from '../services/verifiedLeadRouting';
+import { ContractorSearchResult } from '../services/contractorDiscovery';
 
 const CONTACT_OPTIONS: { label: string; value: ContactPreference }[] = [
   { label: 'Phone', value: 'phone' },
@@ -26,7 +27,7 @@ const CONTACT_OPTIONS: { label: string; value: ContactPreference }[] = [
 ];
 
 function contractorKey(contractor: SelectedContractor) {
-  return contractor.id ?? contractor.businessName;
+  return contractor.id ?? contractor.contractorId ?? contractor.businessName;
 }
 
 function safe(value?: string | number | null) {
@@ -34,13 +35,43 @@ function safe(value?: string | number | null) {
   return String(value);
 }
 
-export default function ContractorLeadRequestScreen({ navigation }: any) {
+function searchResultToSelectedContractor(contractor?: ContractorSearchResult): SelectedContractor | null {
+  if (!contractor) return null;
+  return {
+    ...contractor,
+    id: contractor.contractorId ?? contractor.id,
+    contractorId: contractor.contractorId ?? contractor.id,
+    businessName: contractor.businessName,
+    phone: contractor.phone,
+    website: contractor.website,
+    contactPageUrl: contractor.contactPageUrl,
+    publishedEmail: contractor.publishedEmail,
+    googlePlaceId: contractor.googlePlaceId,
+    googleMapsUrl: contractor.googleMapsUrl,
+    yelpBusinessUrl: contractor.yelpBusinessUrl,
+    rating: contractor.rating,
+    reviewCount: contractor.reviewCount,
+    distanceMiles: contractor.distanceMiles,
+    verified: contractor.verified,
+    emergencyService: contractor.emergencyService,
+    hvacTruthVerified: contractor.hvacTruthVerified,
+    acceptsDashboardLeads: contractor.acceptsDashboardLeads,
+    acceptsEmailLeads: contractor.acceptsEmailLeads,
+    acceptsSmsLeads: contractor.acceptsSmsLeads
+  };
+}
+
+export default function ContractorLeadRequestScreen({ route, navigation }: any) {
   const { user } = useAuth();
+  const routedContractor = searchResultToSelectedContractor(route?.params?.selectedContractor);
+  const initialContractors = routedContractor ? [routedContractor] : DEMO_CONTRACTORS;
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [zipCode, setZipCode] = useState('');
   const [system, setSystem] = useState<HvacSystemRecord | null>(null);
   const [reportSnapshot, setReportSnapshot] = useState<Record<string, unknown>>({});
+  const [availableContractors, setAvailableContractors] = useState<SelectedContractor[]>(initialContractors);
 
   const [serviceType, setServiceType] = useState<LeadServiceType>('no_cooling');
   const [urgency, setUrgency] = useState<LeadUrgency>('within_24_hours');
@@ -52,11 +83,18 @@ export default function ContractorLeadRequestScreen({ navigation }: any) {
   const [homeownerPhone, setHomeownerPhone] = useState('');
   const [homeownerEmail, setHomeownerEmail] = useState(user?.email ?? '');
   const [attachReport, setAttachReport] = useState(true);
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(DEMO_CONTRACTORS.slice(0, 2).map(contractorKey));
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(initialContractors.slice(0, routedContractor ? 1 : 2).map(contractorKey));
 
   useEffect(() => {
     loadDefaults();
   }, [user?.id]);
+
+  useEffect(() => {
+    const nextContractor = searchResultToSelectedContractor(route?.params?.selectedContractor);
+    if (!nextContractor) return;
+    setAvailableContractors([nextContractor]);
+    setSelectedKeys([contractorKey(nextContractor)]);
+  }, [route?.params?.selectedContractor?.contractorId, route?.params?.selectedContractor?.id]);
 
   async function loadDefaults() {
     if (!user?.id) return;
@@ -81,8 +119,8 @@ export default function ContractorLeadRequestScreen({ navigation }: any) {
   }
 
   const selectedContractors = useMemo(
-    () => DEMO_CONTRACTORS.filter((contractor) => selectedKeys.includes(contractorKey(contractor))),
-    [selectedKeys]
+    () => availableContractors.filter((contractor) => selectedKeys.includes(contractorKey(contractor))),
+    [availableContractors, selectedKeys]
   );
 
   const routingDecisions = useMemo(
@@ -158,7 +196,6 @@ export default function ContractorLeadRequestScreen({ navigation }: any) {
     }
   }
 
-
   async function previewContactRouting() {
     const firstContractor = selectedContractors[0];
     if (!firstContractor) {
@@ -166,7 +203,7 @@ export default function ContractorLeadRequestScreen({ navigation }: any) {
       return;
     }
     const serviceLabel = SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label ?? serviceType;
-    const route = detectContractorContactRoute(firstContractor);
+    const route = getLeadDeliveryRoute(firstContractor);
     const packet = {
       serviceTypeLabel: serviceLabel,
       urgency,
@@ -184,9 +221,7 @@ export default function ContractorLeadRequestScreen({ navigation }: any) {
     const phoneScript = buildPhoneScript(packet);
     Alert.alert(
       `Best route: ${route.label}`,
-      `${route.instructions}
-
-This preview will open the available contact route or share sheet for the first selected contractor.`,
+      `${route.instructions}\n\nThis preview will open the available contact route or share sheet for the first selected contractor.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Preview', onPress: async () => performContactRoute(route, leadText, phoneScript) }
@@ -202,6 +237,13 @@ This preview will open the available contact route or share sheet for the first 
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Request Contractor Help</Text>
       <Text style={styles.subtitle}>Send a clean HVAC Truth request with your system details, data plate info, air handler location, and service need.</Text>
+
+      {routedContractor ? (
+        <View style={styles.sourceCard}>
+          <Text style={styles.sourceTitle}>Started from contractor search</Text>
+          <Text style={styles.routeHelper}>{routedContractor.businessName} is preselected from the search results. Contractor ID, verification flags, source IDs, and contact route data will carry into this lead request.</Text>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>1. What do you need?</Text>
@@ -242,12 +284,12 @@ This preview will open the available contact route or share sheet for the first 
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>4. Choose contractors</Text>
-        <Text style={styles.helper}>MVP demo list. Later this will pull live contractors by ZIP code, license status, review quality, service radius, and response history.</Text>
+        <Text style={styles.helper}>{routedContractor ? 'Selected from contractor search. You can remove it before submitting if needed.' : 'MVP demo list. Use Find a Technician first to send a real persisted contractor record into this request.'}</Text>
         <View style={styles.routingSummaryCard}>
           <Text style={styles.routingSummaryTitle}>Verified routing preview</Text>
           <Text style={styles.routeHelper}>{routingSummary.summary}</Text>
         </View>
-        {DEMO_CONTRACTORS.map((contractor) => {
+        {availableContractors.map((contractor) => {
           const selected = selectedKeys.includes(contractorKey(contractor));
           const decision = buildVerifiedLeadRoutingDecisions([contractor])[0];
           const route = decision.route;
@@ -255,8 +297,9 @@ This preview will open the available contact route or share sheet for the first 
             <Pressable key={contractorKey(contractor)} style={[styles.contractorCard, selected && styles.contractorCardSelected]} onPress={() => toggleContractor(contractor)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.contractorName}>{contractor.businessName}</Text>
-                <Text style={styles.contractorMeta}>★ {contractor.rating} ({contractor.reviewCount} reviews) • {contractor.distanceMiles} mi</Text>
-                <Text style={styles.badges}>{contractor.verified ? 'License verified' : 'License not verified'} • {contractor.emergencyService ? 'Emergency service' : 'Standard hours'}</Text>
+                <Text style={styles.contractorMeta}>★ {contractor.rating ?? 'No rating'} ({contractor.reviewCount ?? 0} reviews) • {contractor.distanceMiles ?? '?'} mi</Text>
+                <Text style={styles.badges}>{contractor.verified ? 'License/listing verified' : 'Listing not verified'} • {contractor.emergencyService ? 'Emergency service' : 'Standard hours'}</Text>
+                {contractor.contractorId || contractor.id ? <Text style={styles.routeHelper}>Contractor ID: {(contractor.contractorId ?? contractor.id ?? '').slice(0, 8)}...</Text> : null}
                 <Text style={decision.dashboardReady ? styles.dashboardRouteText : styles.routeText}>Best route: {route.label}</Text>
                 <Text style={styles.routeHelper}>{decision.reason}</Text>
                 <Text style={styles.routeHelper}>{route.instructions}</Text>
@@ -309,6 +352,8 @@ const styles = StyleSheet.create({
   container: { padding: 24, backgroundColor: '#F8FAFC' },
   title: { fontSize: 30, fontWeight: '900', color: '#0F2E5F', marginBottom: 8 },
   subtitle: { fontSize: 16, lineHeight: 23, color: '#475569', marginBottom: 16 },
+  sourceCard: { backgroundColor: '#ECFDF5', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#A7F3D0', marginBottom: 14 },
+  sourceTitle: { color: '#14532D', fontWeight: '900', marginBottom: 5 },
   section: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#D8E2F0', marginBottom: 14 },
   sectionTitle: { fontSize: 18, fontWeight: '900', color: '#0F2E5F', marginBottom: 12 },
   label: { color: '#0F2E5F', fontWeight: '900', marginTop: 12, marginBottom: 6 },
@@ -332,24 +377,9 @@ const styles = StyleSheet.create({
   contractorName: { color: '#0F2E5F', fontWeight: '900', fontSize: 16, marginBottom: 4 },
   contractorMeta: { color: '#334155', fontWeight: '700', marginBottom: 4 },
   badges: { color: '#0F766E', fontWeight: '800', fontSize: 13 },
-  routeText: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0B66E4'
-  },
-  dashboardRouteText: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#15803D'
-  },
-  routeHelper: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16
-  },
+  routeText: { marginTop: 8, fontSize: 12, fontWeight: '700', color: '#0B66E4' },
+  dashboardRouteText: { marginTop: 8, fontSize: 12, fontWeight: '900', color: '#15803D' },
+  routeHelper: { marginTop: 4, fontSize: 12, color: '#64748B', lineHeight: 16 },
   selectedText: { color: '#0B66E4', fontWeight: '900' },
   unselectedText: { color: '#64748B', fontWeight: '900' },
   preview: { color: '#334155', backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, lineHeight: 21, fontFamily: undefined },
