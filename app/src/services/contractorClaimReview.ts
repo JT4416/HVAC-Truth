@@ -105,8 +105,19 @@ export function buildClaimReviewChecklist(claim: ContractorClaimReviewRecord) {
     claim.license_number ? 'License number provided' : 'License number missing',
     claim.website ? 'Website provided' : 'Website missing',
     claim.service_zip_codes.length > 0 ? 'Service ZIP codes provided' : 'Service ZIP codes missing',
-    claim.lead_preferences.length > 0 ? 'Lead preferences selected' : 'Lead preferences missing'
+    claim.emergency_service ? 'Emergency availability provided' : 'Standard-hours availability provided',
+    'Verified participation standard acknowledged: active contractors accept all eligible HVAC Truth lead types inside operating limits'
   ];
+}
+
+export function buildClaimParticipationDefaults(claim: ContractorClaimReviewRecord) {
+  return {
+    participationStatus: 'active' as const,
+    acceptsAllEligibleLeadTypes: true,
+    serviceZipCodes: claim.service_zip_codes,
+    emergencyService: claim.emergency_service,
+    deliveryMethods: claim.lead_preferences
+  };
 }
 
 export function formatClaimStatus(status: ContractorClaimStatus | string) {
