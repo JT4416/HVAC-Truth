@@ -6,16 +6,22 @@ export type AdminParticipationStatus = 'active' | 'inactive' | 'paused' | 'suspe
 
 export type ContractorParticipationAdminRecord = SelectedContractor & {
   id: string;
+  contractorId?: string;
   business_name?: string | null;
   hvac_truth_verified?: boolean | null;
   accepts_dashboard_leads?: boolean | null;
+  acceptsDashboardLeads?: boolean;
   hvac_truth_participation_status?: ContractorParticipationStatus | AdminParticipationStatus | null;
   participation_paused?: boolean | null;
+  participationPaused?: boolean;
   participation_pause_reason?: string | null;
   service_zip_codes?: string[] | null;
+  serviceZipCodes?: string[];
   emergency_service?: boolean | null;
   max_daily_dashboard_leads?: number | null;
   max_weekly_dashboard_leads?: number | null;
+  maxDailyLeads?: number;
+  maxWeeklyLeads?: number;
   accepts_all_eligible_lead_types?: boolean | null;
 };
 
