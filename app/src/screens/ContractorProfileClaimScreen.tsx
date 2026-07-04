@@ -10,7 +10,7 @@ import {
   submitContractorProfileClaim
 } from '../services/contractorProfileClaiming';
 
-const leadPreferenceOptions: { label: string; value: LeadPreference }[] = [
+const deliveryMethodOptions: { label: string; value: LeadPreference }[] = [
   { label: 'HVAC Truth dashboard', value: 'dashboard' },
   { label: 'Email', value: 'email' },
   { label: 'Phone call', value: 'phone' },
@@ -29,7 +29,7 @@ export default function ContractorProfileClaimScreen() {
   const [serviceZipCodes, setServiceZipCodes] = useState('');
   const [serviceRadiusMiles, setServiceRadiusMiles] = useState('25');
   const [emergencyService, setEmergencyService] = useState(false);
-  const [leadPreferences, setLeadPreferences] = useState<LeadPreference[]>(['dashboard', 'email']);
+  const [deliveryMethods, setDeliveryMethods] = useState<LeadPreference[]>(['dashboard', 'email']);
   const [verificationNotes, setVerificationNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [claims, setClaims] = useState<any[]>([]);
@@ -43,8 +43,8 @@ export default function ContractorProfileClaimScreen() {
     setClaims(data || []);
   }
 
-  function toggleLeadPreference(value: LeadPreference) {
-    setLeadPreferences((current) =>
+  function toggleDeliveryMethod(value: LeadPreference) {
+    setDeliveryMethods((current) =>
       current.includes(value)
         ? current.filter((item) => item !== value)
         : [...current, value]
@@ -63,7 +63,7 @@ export default function ContractorProfileClaimScreen() {
       serviceZipCodes: serviceZipCodes.split(',').map((zip) => zip.trim()),
       serviceRadiusMiles: Number(serviceRadiusMiles) || undefined,
       emergencyService,
-      leadPreferences,
+      leadPreferences: deliveryMethods,
       verificationNotes
     };
   }
@@ -89,7 +89,7 @@ export default function ContractorProfileClaimScreen() {
     setServiceZipCodes('');
     setServiceRadiusMiles('25');
     setEmergencyService(false);
-    setLeadPreferences(['dashboard', 'email']);
+    setDeliveryMethods(['dashboard', 'email']);
     setVerificationNotes('');
     loadClaims();
   }
@@ -100,7 +100,7 @@ export default function ContractorProfileClaimScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Claim Contractor Profile</Text>
       <Text style={styles.subtitle}>
-        Contractors can claim their HVAC Truth profile, verify their business, choose service areas, and set how they want to receive leads.
+        Contractors can claim their HVAC Truth profile, verify their business, choose service areas, and set how they want homeowners to contact them.
       </Text>
 
       <View style={styles.card}>
@@ -132,11 +132,12 @@ export default function ContractorProfileClaimScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Lead preferences</Text>
-        {leadPreferenceOptions.map((option) => (
+        <Text style={styles.sectionTitle}>Delivery methods</Text>
+        <Text style={styles.helper}>Choose contact routes only. This does not let a contractor choose preferred job categories.</Text>
+        {deliveryMethodOptions.map((option) => (
           <View key={option.value} style={styles.rowBetween}>
             <Text style={styles.label}>{option.label}</Text>
-            <Switch value={leadPreferences.includes(option.value)} onValueChange={() => toggleLeadPreference(option.value)} />
+            <Switch value={deliveryMethods.includes(option.value)} onValueChange={() => toggleDeliveryMethod(option.value)} />
           </View>
         ))}
       </View>
