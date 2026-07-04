@@ -27,9 +27,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V20 — Troubleshooting to Lead Conversion**.
+Current stage: **V21 — Contractor Packet Intelligence**.
 
-The app now lets homeowners complete a safe troubleshooting workflow and move directly into a contractor lead request. The lead request opens with the saved troubleshooting session preselected, troubleshooting attachment enabled, and service type, urgency, symptom summary, and desired outcome prefilled from the workflow result.
+The app now turns saved troubleshooting sessions into richer contractor-facing packets. Contractor packets include workflow-specific verification focus, severity explanations, homeowner safety boundaries, safe photo prompts, and safe checklist status while keeping homeowner instructions inside existing safety limits.
 
 ## Build History
 
@@ -287,11 +287,45 @@ V20 behavior:
 
 No new migration is required for V20.
 
+### V21 — Contractor Packet Intelligence
+
+V21 makes contractor lead packets smarter and workflow-specific without expanding homeowner DIY instructions.
+
+New V21 files:
+
+```text
+docs/features/CONTRACTOR_PACKET_INTELLIGENCE.md
+docs/build/NEXT_BUILD_STEPS_V21.md
+```
+
+Updated V21 files:
+
+```text
+app/src/services/troubleshootingSessions.ts
+app/src/services/contractorLeadFlow.ts
+app/src/services/contractorContactRouting.ts
+app/src/screens/ContractorLeadDetailScreen.tsx
+README.md
+```
+
+V21 behavior:
+
+- Adds `buildContractorPacketIntelligence(session)`.
+- Adds severity explanations for contractor handoff context.
+- Adds workflow-specific professional verification focus items.
+- Adds homeowner safety boundary summaries to contractor packets.
+- Adds safe photo prompts for key troubleshooting workflows.
+- Adds safe checklist status from homeowner-safe workflow steps.
+- Embeds packet intelligence into `reportSnapshot.troubleshooting.contractorPacket`.
+- Includes packet intelligence in saved lead summaries, standardized email/contact packets, lead previews, and contractor dashboard lead detail.
+
+No new migration is required for V21.
+
 ## Next Recommended Build
 
-**V21 — Contractor Packet Intelligence**
+**V22 — Photo Capture for Contractor Packets**
 
-Make contractor lead packets workflow-specific, add contractor-facing severity explanations, and add homeowner-safe photo prompts before lead submission.
+Turn V21 safe photo prompts into actual homeowner upload controls, attach photos to lead packets, and show upload/skip/not-applicable status in the contractor dashboard.
 
 ## Active Repository
 
