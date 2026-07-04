@@ -87,11 +87,11 @@ export default function AdminContractorClaimDetailScreen({ route, navigation }: 
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Service and lead setup</Text>
+        <Text style={styles.sectionTitle}>Service and delivery setup</Text>
         <Text style={styles.value}>Service ZIPs: {claim.service_zip_codes.join(', ') || 'Not provided'}</Text>
         <Text style={styles.value}>Radius: {claim.service_radius_miles || 'Not provided'} miles</Text>
         <Text style={styles.value}>Emergency service: {claim.emergency_service ? 'Yes' : 'No'}</Text>
-        <Text style={styles.value}>Lead preferences: {claim.lead_preferences.join(', ') || 'Not provided'}</Text>
+        <Text style={styles.value}>Delivery methods: {claim.delivery_methods.join(', ') || 'Not provided'}</Text>
       </View>
 
       <View style={styles.card}>
@@ -112,7 +112,7 @@ export default function AdminContractorClaimDetailScreen({ route, navigation }: 
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Decision</Text>
-        <Text style={styles.helper}>Approving a claim should create or update the contractor profile, turn on HVAC Truth verification, create dashboard access, copy service areas, and copy lead preferences.</Text>
+        <Text style={styles.helper}>Approving a claim should create or update the contractor profile, turn on HVAC Truth verification, create dashboard access, copy service areas, and copy delivery methods.</Text>
         <PrimaryButton title={saving ? 'Saving...' : 'Approve and Verify'} onPress={() => handleDecision('verified')} />
         <PrimaryButton title="Request More Information" onPress={() => handleDecision('needs_review')} />
         <PrimaryButton title="Reject Claim" onPress={() => handleDecision('rejected')} />
