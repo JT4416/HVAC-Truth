@@ -18,7 +18,14 @@ import { HvacSystemRecord } from '../services/profilePersistence';
 import { buildPhoneScript, buildStandardizedLeadPacket, performContactRoute } from '../services/contractorContactRouting';
 import { buildVerifiedLeadRoutingDecisions, getDashboardRoutingSummary, getLeadDeliveryRoute } from '../services/verifiedLeadRouting';
 import { ContractorSearchResult } from '../services/contractorDiscovery';
-import { TroubleshootingSessionRecord, buildTroubleshootingSnapshot, getLatestTroubleshootingSessionForLead } from '../services/troubleshootingSessions';
+import {
+  TroubleshootingSessionRecord,
+  buildLeadPacketPreview,
+  buildTroubleshootingSnapshot,
+  getRecommendedWorkflowIdForServiceType,
+  getRecentTroubleshootingSessions,
+  markTroubleshootingSessionUsed
+} from '../services/troubleshootingSessions';
 
 const CONTACT_OPTIONS: { label: string; value: ContactPreference }[] = [
   { label: 'Phone', value: 'phone' },
@@ -72,7 +79,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
   const [zipCode, setZipCode] = useState('');
   const [system, setSystem] = useState<HvacSystemRecord | null>(null);
   const [reportSnapshot, setReportSnapshot] = useState<Record<string, unknown>>({});
-  const [troubleshootingSession, setTroubleshootingSession] = useState<TroubleshootingSessionRecord | null>(null);
+  const [troubleshootingSessions, setTroubleshootingSessions] = useState<TroubleshootingSessionRecord[]>([]);
+  const [selectedTroubleshootingId, setSelectedTroubleshootingId] = useState<string | null>(null);
   const [attachTroubleshooting, setAttachTroubleshooting] = useState(true);
   const [availableContractors, setAvailableContractors] = useState<SelectedContractor[]>(initialContractors);
 
@@ -109,8 +117,10 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       setReportSnapshot(defaults.reportSnapshot);
       setHomeownerEmail(defaults.profile?.email ?? user.email ?? '');
       setHomeownerName(defaults.profile?.full_name ?? '');
-      const latestTroubleshooting = await getLatestTroubleshootingSessionForLead(user.id, defaults.system?.id);
-      setTroubleshootingSession(latestTroubleshooting);
+      const sessions = await getRecentTroubleshootingSessions(user.id, 8);
+      const leadEligible = sessions.find((session) => session.attach_to_lead_request);
+      setTroubleshootingSessions(sessions);
+      setSelectedTroubleshootingId(leadEligible?.id ?? sessions[0]?.id ?? null);
     } catch (error: any) {
       Alert.alert('Could not load lead request', error?.message ?? 'Please try again.');
     } finally {
@@ -128,6 +138,13 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     [availableContractors, selectedKeys]
   );
 
+  const selectedTroubleshootingSession = useMemo(
+    () => troubleshootingSessions.find((session) => session.id === selectedTroubleshootingId) ?? null,
+    [troubleshootingSessions, selectedTroubleshootingId]
+  );
+
+  const recommendedWorkflowId = useMemo(() => getRecommendedWorkflowIdForServiceType(serviceType), [serviceType]);
+
   const routingDecisions = useMemo(
     () => buildVerifiedLeadRoutingDecisions(selectedContractors),
     [selectedContractors]
@@ -140,8 +157,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
 
   const leadReportSnapshot = useMemo(() => ({
     ...reportSnapshot,
-    troubleshooting: attachTroubleshooting ? buildTroubleshootingSnapshot(troubleshootingSession) : null
-  }), [reportSnapshot, attachTroubleshooting, troubleshootingSession]);
+    troubleshooting: attachTroubleshooting ? buildTroubleshootingSnapshot(selectedTroubleshootingSession) : null
+  }), [reportSnapshot, attachTroubleshooting, selectedTroubleshootingSession]);
 
   const leadPreview = useMemo(() => buildLeadSummary({
     userId: user?.id ?? '',
@@ -195,7 +212,10 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         selectedContractors,
         reportSnapshot: attachReport ? leadReportSnapshot : {}
       });
-      Alert.alert('Request submitted', `${routingSummary.summary}\n\nTroubleshooting attached: ${attachTroubleshooting && troubleshootingSession ? 'Yes' : 'No'}\n\nLead status: ${request.lead_status}.`, [
+      if (attachTroubleshooting && selectedTroubleshootingSession) {
+        await markTroubleshootingSessionUsed(selectedTroubleshootingSession.id, 'lead');
+      }
+      Alert.alert('Request submitted', `${routingSummary.summary}\n\nTroubleshooting attached: ${attachTroubleshooting && selectedTroubleshootingSession ? 'Yes' : 'No'}\n\nLead status: ${request.lead_status}.`, [
         { text: 'Back Home', onPress: () => navigation.navigate('Home') },
         { text: 'OK' }
       ]);
@@ -258,6 +278,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>1. What do you need?</Text>
         <OptionGrid options={SERVICE_TYPE_OPTIONS} selected={serviceType} onSelect={(value) => setServiceType(value as LeadServiceType)} />
+        <View style={styles.recommendationCard}>
+          <Text style={styles.recommendationTitle}>Recommended troubleshooting workflow</Text>
+          <Text style={styles.routeHelper}>Based on this service type, HVAC Truth recommends workflow ID: {recommendedWorkflowId}</Text>
+          <PrimaryButton title="Open Troubleshooting" onPress={() => navigation.navigate('Troubleshooting')} />
+        </View>
         <Text style={styles.label}>What is happening?</Text>
         <TextInput style={[styles.input, styles.textArea]} multiline value={symptomSummary} onChangeText={setSymptomSummary} />
         <Text style={styles.label}>What outcome do you want?</Text>
@@ -290,17 +315,27 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         </View>
         <ReportMiniCard system={system} zipCode={zipCode} />
         <View style={styles.troubleshootingCard}>
-          <Text style={styles.troubleshootingTitle}>Latest troubleshooting result</Text>
-          {troubleshootingSession ? (
-            <>
-              <Text style={styles.routeHelper}>{troubleshootingSession.workflow_title} • {troubleshootingSession.severity.toUpperCase()}</Text>
-              <Text style={styles.routeHelper}>{troubleshootingSession.result_summary}</Text>
-              <View style={styles.switchRowCompact}>
-                <Text style={styles.helper}>Attach to this lead packet</Text>
-                <Switch value={attachTroubleshooting} onValueChange={setAttachTroubleshooting} />
-              </View>
-            </>
-          ) : <Text style={styles.helper}>No saved troubleshooting session available. Complete and save a workflow first to attach it here.</Text>}
+          <Text style={styles.troubleshootingTitle}>Choose troubleshooting result</Text>
+          <View style={styles.switchRowCompact}>
+            <Text style={styles.helper}>Attach troubleshooting to this lead packet</Text>
+            <Switch value={attachTroubleshooting} onValueChange={setAttachTroubleshooting} />
+          </View>
+          {!troubleshootingSessions.length ? <Text style={styles.helper}>No saved troubleshooting session available. Complete and save a workflow first to attach it here.</Text> : null}
+          {troubleshootingSessions.map((session) => {
+            const selected = selectedTroubleshootingId === session.id;
+            return (
+              <Pressable key={session.id} style={[styles.sessionCard, selected && styles.sessionCardSelected]} onPress={() => setSelectedTroubleshootingId(session.id)}>
+                <Text style={styles.sessionTitle}>{session.homeowner_label || session.workflow_title}</Text>
+                <Text style={styles.routeHelper}>{session.workflow_title} • {session.severity.toUpperCase()}</Text>
+                <Text style={styles.routeHelper}>{session.result_summary ?? 'No summary saved'}</Text>
+                <Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected for packet' : 'Tap to select'}</Text>
+                <Pressable onPress={() => navigation.navigate('TroubleshootingSessionDetail', { sessionId: session.id })}>
+                  <Text style={styles.manageLink}>Manage controls</Text>
+                </Pressable>
+              </Pressable>
+            );
+          })}
+          <Text style={styles.preview}>{buildLeadPacketPreview(attachTroubleshooting ? selectedTroubleshootingSession : null)}</Text>
         </View>
         <PrimaryButton title="Review Full Report" onPress={() => navigation.navigate('ContractorReport')} />
       </View>
@@ -394,6 +429,12 @@ const styles = StyleSheet.create({
   reportCard: { backgroundColor: '#EFF6FF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 10 },
   troubleshootingCard: { backgroundColor: '#F0FDF4', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 10 },
   troubleshootingTitle: { color: '#14532D', fontWeight: '900', marginBottom: 4 },
+  sessionCard: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#CBD5E1', padding: 12, marginTop: 8 },
+  sessionCardSelected: { borderColor: '#15803D', backgroundColor: '#ECFDF5' },
+  sessionTitle: { color: '#0F172A', fontWeight: '900', marginBottom: 4 },
+  manageLink: { color: '#0B66E4', fontWeight: '900', marginTop: 6 },
+  recommendationCard: { backgroundColor: '#FFFBEB', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 10 },
+  recommendationTitle: { color: '#92400E', fontWeight: '900', marginBottom: 4 },
   reportTitle: { color: '#0F2E5F', fontWeight: '900', marginBottom: 8 },
   reportLine: { color: '#334155', fontWeight: '700', marginBottom: 4 },
   routingSummaryCard: { backgroundColor: '#F0FDF4', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 10 },
@@ -408,6 +449,6 @@ const styles = StyleSheet.create({
   routeHelper: { marginTop: 4, fontSize: 12, color: '#64748B', lineHeight: 16 },
   selectedText: { color: '#0B66E4', fontWeight: '900' },
   unselectedText: { color: '#64748B', fontWeight: '900' },
-  preview: { color: '#334155', backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, lineHeight: 21, fontFamily: undefined },
+  preview: { color: '#334155', backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, lineHeight: 21, fontFamily: undefined, marginTop: 8 },
   disclaimer: { marginTop: 12, color: '#64748B', fontSize: 14, lineHeight: 20 }
 });
