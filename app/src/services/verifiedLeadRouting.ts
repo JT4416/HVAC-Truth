@@ -23,12 +23,32 @@ function normalizeArray(value: unknown): string[] {
   return [];
 }
 
+function buildPublicRoutingProfile(contractor: SelectedContractor): SelectedContractor {
+  return {
+    ...contractor,
+    hvacTruthVerified: false,
+    acceptsDashboardLeads: false
+  };
+}
+
+export function getContractorId(contractor: SelectedContractor) {
+  return contractor.id || contractor.contractorId || null;
+}
+
 export function isDashboardEligibleContractor(contractor: SelectedContractor) {
-  return Boolean(contractor.hvacTruthVerified && contractor.acceptsDashboardLeads && (contractor.id || contractor.contractorId));
+  return Boolean(contractor.hvacTruthVerified && contractor.acceptsDashboardLeads && getContractorId(contractor));
+}
+
+export function getLeadDeliveryRoute(contractor: SelectedContractor) {
+  if (isDashboardEligibleContractor(contractor)) {
+    return detectContractorContactRoute(contractor);
+  }
+
+  return detectContractorContactRoute(buildPublicRoutingProfile(contractor));
 }
 
 export function buildVerifiedLeadRoutingDecision(contractor: SelectedContractor): VerifiedLeadRoutingDecision {
-  const route = detectContractorContactRoute(contractor);
+  const route = getLeadDeliveryRoute(contractor);
   const dashboardReady = route.preferredMethod === 'verified_dashboard' && isDashboardEligibleContractor(contractor);
 
   return {
@@ -36,7 +56,7 @@ export function buildVerifiedLeadRoutingDecision(contractor: SelectedContractor)
     route,
     dashboardReady,
     reason: dashboardReady
-      ? 'Contractor is HVAC Truth verified and accepts dashboard leads.'
+      ? 'Contractor is HVAC Truth verified, has a contractor profile ID, and accepts dashboard leads.'
       : 'Contractor is not eligible for direct dashboard delivery and should use public-contact routing.'
   };
 }
@@ -66,10 +86,6 @@ export async function getVerifiedDashboardContractorsByZip(zipCode: string) {
     });
 
   return { data: matches as VerifiedContractorRoutingRecord[], error: null };
-}
-
-export function getContractorId(contractor: SelectedContractor) {
-  return contractor.id || contractor.contractorId || null;
 }
 
 export function getDashboardRoutingSummary(decisions: VerifiedLeadRoutingDecision[]) {
