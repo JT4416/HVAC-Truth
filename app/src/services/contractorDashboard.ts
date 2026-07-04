@@ -96,7 +96,7 @@ export async function loadContractorDashboardLeads() {
     .from('contractor_lead_recipients')
     .select('*, contractor_lead_requests(*)')
     .in('contractor_id', contractorIds)
-    .eq('delivery_method', 'dashboard')
+    .eq('delivery_method', 'verified_dashboard')
     .order('created_at', { ascending: false });
 
   return { data: (data || []).map(mapLeadRecipient), contractors: access.data, error };
