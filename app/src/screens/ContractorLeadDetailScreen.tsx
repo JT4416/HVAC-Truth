@@ -63,6 +63,7 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
   if (!lead) return null;
 
   const report = lead.reportSnapshot || {};
+  const troubleshooting = (report as any).troubleshooting;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -103,6 +104,26 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
         <Text style={styles.value}>Air handler location: {String(report.airHandlerLocation || 'Not provided')}</Text>
         <Text style={styles.value}>Access notes: {String(report.accessNotes || 'Not provided')}</Text>
         <Text style={styles.value}>Decoder confidence: {String(report.decoderConfidence || 'Unknown')}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Troubleshooting completed by homeowner</Text>
+        {troubleshooting ? (
+          <>
+            <Text style={styles.label}>Workflow</Text>
+            <Text style={styles.value}>{String(troubleshooting.workflowTitle || 'Not provided')}</Text>
+            <Text style={styles.label}>Severity</Text>
+            <Text style={styles.value}>{String(troubleshooting.severity || 'Not provided')}</Text>
+            <Text style={styles.label}>Summary</Text>
+            <Text style={styles.value}>{String(troubleshooting.summary || 'Not provided')}</Text>
+            <Text style={styles.label}>Homeowner script</Text>
+            <Text style={styles.value}>{String(troubleshooting.homeownerScript || 'Not provided')}</Text>
+            <Text style={styles.label}>Contractor notes</Text>
+            {Array.isArray(troubleshooting.contractorReportNotes) && troubleshooting.contractorReportNotes.length
+              ? troubleshooting.contractorReportNotes.map((note: string) => <Text key={note} style={styles.value}>• {note}</Text>)
+              : <Text style={styles.value}>No notes provided</Text>}
+          </>
+        ) : <Text style={styles.helper}>No troubleshooting session attached to this lead.</Text>}
       </View>
 
       <View style={styles.card}>
