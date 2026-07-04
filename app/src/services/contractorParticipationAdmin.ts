@@ -3,6 +3,15 @@ import { ContractorParticipationStatus, buildContractorParticipationDecision } f
 import { SelectedContractor } from './contractorLeadFlow';
 
 export type AdminParticipationStatus = 'active' | 'inactive' | 'paused' | 'suspended';
+export type DeliveryMethodMigrationReadinessStatus = 'ready' | 'needs_validation' | 'blocked';
+
+export type ContractorDeliveryMethodMigrationReadiness = {
+  status: DeliveryMethodMigrationReadinessStatus;
+  checklist: string[];
+  blockers: string[];
+  acceptanceCriteria: string[];
+  legacyRetirementCriteria: string[];
+};
 
 export type ContractorParticipationAdminRecord = SelectedContractor & {
   id: string;
@@ -23,6 +32,8 @@ export type ContractorParticipationAdminRecord = SelectedContractor & {
   maxDailyLeads?: number;
   maxWeeklyLeads?: number;
   accepts_all_eligible_lead_types?: boolean | null;
+  has_current_delivery_methods?: boolean;
+  has_legacy_delivery_methods?: boolean;
 };
 
 export type ParticipationUpdateInput = {
@@ -134,4 +145,60 @@ export function buildAdminParticipationSummary(contractor: ContractorParticipati
     ...decision,
     adminSummary: `${contractor.businessName || contractor.business_name || 'Contractor'} is ${decision.label.toLowerCase()}. ${decision.reason}`
   };
+}
+
+export function buildDeliveryMethodMigrationReadiness(
+  contractor: ContractorParticipationAdminRecord,
+  currentDeliveryMethodCount: number,
+  legacyDeliveryMethodCount: number
+): ContractorDeliveryMethodMigrationReadiness {
+  const checklist = [
+    'V29 claim approval RPC has been applied in staging.',
+    'At least one approved claim writes to contractor_delivery_methods.',
+    'App delivery-method reads prefer contractor_delivery_methods.',
+    'Legacy contractor_lead_preferences rows still exist only as compatibility fallback.',
+    'Verified contractor participation standard remains locked: no lead-category cherry-picking.'
+  ];
+
+  const acceptanceCriteria = [
+    'current delivery-method rows exist for every active verified contractor before legacy retirement',
+    'legacy row count matches or is intentionally superseded by current delivery-method rows',
+    'contractor dashboard delivery source shows Current delivery-method table',
+    'V31 SQL harness passes in staging or local Supabase',
+    'npm run typecheck and Expo startup validation pass locally'
+  ];
+
+  const legacyRetirementCriteria = [
+    'no production screen depends exclusively on contractor_lead_preferences',
+    'all verified contractors have active contractor_delivery_methods rows after claim approval or backfill',
+    'fallback logging or admin source visibility shows zero unexpected legacy reads during beta validation',
+    'rollback plan exists before removing legacy reads or columns'
+  ];
+
+  const blockers: string[] = [];
+  if (!contractor.hvac_truth_verified) blockers.push('Contractor is not HVAC Truth verified.');
+  if (currentDeliveryMethodCount === 0) blockers.push('No active rows found in contractor_delivery_methods.');
+  if (legacyDeliveryMethodCount > 0 && currentDeliveryMethodCount === 0) blockers.push('Only legacy contractor_lead_preferences rows are available.');
+  if (contractor.accepts_all_eligible_lead_types === false) blockers.push('Contractor is not marked as accepting all eligible lead types.');
+
+  return {
+    status: blockers.length > 0 ? 'blocked' : legacyDeliveryMethodCount > 0 ? 'needs_validation' : 'ready',
+    checklist,
+    blockers,
+    acceptanceCriteria,
+    legacyRetirementCriteria
+  };
+}
+
+export function formatDeliveryMethodMigrationReadinessStatus(status: DeliveryMethodMigrationReadinessStatus) {
+  switch (status) {
+    case 'ready':
+      return 'Ready for legacy retirement review';
+    case 'needs_validation':
+      return 'Needs staging validation';
+    case 'blocked':
+      return 'Blocked';
+    default:
+      return status;
+  }
 }
