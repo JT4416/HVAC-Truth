@@ -233,14 +233,13 @@ export function getServiceTypeForWorkflowId(workflowId?: string): LeadServiceTyp
 
 export function getLeadUrgencyForTroubleshootingSeverity(severity?: TroubleshootingSessionRecord['severity']): LeadUrgency {
   switch (severity) {
-    case 'critical':
+    case 'urgent-stop':
       return 'emergency_today';
-    case 'warning':
-    case 'high':
+    case 'call-pro':
       return 'within_24_hours';
     case 'caution':
-    case 'medium':
       return 'this_week';
+    case 'safe-check':
     default:
       return 'within_24_hours';
   }
