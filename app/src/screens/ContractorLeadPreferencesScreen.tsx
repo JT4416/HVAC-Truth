@@ -7,13 +7,21 @@ import {
   getContractorDashboardDeliveryMethods,
   getVerifiedContractorDashboardUsers
 } from '../services/contractorDashboard';
-import { formatContractorDeliveryMethod } from '../services/contractorDeliveryMethods';
+import {
+  buildDeliveryMethodEmptyState,
+  buildDeliveryMethodSourceSummary,
+  ContractorDeliveryMethodReadSource,
+  formatContractorDeliveryMethod,
+  formatContractorDeliveryMethodSource
+} from '../services/contractorDeliveryMethods';
 import { VERIFIED_CONTRACTOR_PARTICIPATION_STANDARD } from '../services/contractorParticipationRules';
 
 export default function ContractorLeadPreferencesScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [contractors, setContractors] = useState<ContractorDashboardUser[]>([]);
   const [deliveryMethods, setDeliveryMethods] = useState<any[]>([]);
+  const [deliveryMethodSource, setDeliveryMethodSource] = useState<ContractorDeliveryMethodReadSource | null>(null);
+  const [deliveryMethodFallback, setDeliveryMethodFallback] = useState(false);
   const [availability, setAvailability] = useState<any[]>([]);
 
   useEffect(() => {
@@ -30,7 +38,13 @@ export default function ContractorLeadPreferencesScreen({ navigation }: any) {
       const deliveryMethodResult = await getContractorDashboardDeliveryMethods(contractorId);
       const availabilityResult = await getContractorAvailabilityWindows(contractorId);
       setDeliveryMethods(deliveryMethodResult.data || []);
+      setDeliveryMethodSource(deliveryMethodResult.source || null);
+      setDeliveryMethodFallback(deliveryMethodResult.source === 'contractor_lead_preferences');
       setAvailability(availabilityResult.data || []);
+    } else {
+      setDeliveryMethods([]);
+      setDeliveryMethodSource(null);
+      setDeliveryMethodFallback(false);
     }
 
     setLoading(false);
@@ -75,8 +89,15 @@ export default function ContractorLeadPreferencesScreen({ navigation }: any) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Current delivery methods</Text>
+        <View style={styles.sourceBadge}>
+          <Text style={styles.sourceBadgeText}>{formatContractorDeliveryMethodSource(deliveryMethodSource)}</Text>
+        </View>
+        <Text style={styles.helper}>{buildDeliveryMethodSourceSummary(deliveryMethodSource, deliveryMethods.length, deliveryMethodFallback)}</Text>
+        {deliveryMethodFallback ? (
+          <Text style={styles.warningText}>Legacy compatibility mode is active. Delivery rows should be migrated to the current delivery-method table before retiring legacy fields.</Text>
+        ) : null}
         {deliveryMethods.length === 0 ? (
-          <Text style={styles.helper}>No delivery methods have been created yet. Dashboard delivery should be added during claim verification.</Text>
+          <Text style={styles.helper}>{buildDeliveryMethodEmptyState(deliveryMethodSource)}</Text>
         ) : (
           deliveryMethods.map((method) => (
             <View key={method.id} style={styles.row}>
@@ -117,6 +138,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 10 },
   helper: { color: '#64748B', lineHeight: 20, marginTop: 4 },
+  warningText: { color: '#92400E', lineHeight: 20, marginTop: 8, fontWeight: '700' },
+  sourceBadge: { alignSelf: 'flex-start', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#E2E8F0', marginBottom: 8 },
+  sourceBadgeText: { color: '#334155', fontWeight: '800', fontSize: 12 },
   row: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
   rowTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' }
 });
