@@ -18,6 +18,7 @@ import { HvacSystemRecord } from '../services/profilePersistence';
 import { buildPhoneScript, buildStandardizedLeadPacket, performContactRoute } from '../services/contractorContactRouting';
 import { buildVerifiedLeadRoutingDecisions, getDashboardRoutingSummary, getLeadDeliveryRoute } from '../services/verifiedLeadRouting';
 import { ContractorSearchResult } from '../services/contractorDiscovery';
+import { TroubleshootingSessionRecord, buildTroubleshootingSnapshot, getLatestTroubleshootingSessionForLead } from '../services/troubleshootingSessions';
 
 const CONTACT_OPTIONS: { label: string; value: ContactPreference }[] = [
   { label: 'Phone', value: 'phone' },
@@ -71,6 +72,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
   const [zipCode, setZipCode] = useState('');
   const [system, setSystem] = useState<HvacSystemRecord | null>(null);
   const [reportSnapshot, setReportSnapshot] = useState<Record<string, unknown>>({});
+  const [troubleshootingSession, setTroubleshootingSession] = useState<TroubleshootingSessionRecord | null>(null);
+  const [attachTroubleshooting, setAttachTroubleshooting] = useState(true);
   const [availableContractors, setAvailableContractors] = useState<SelectedContractor[]>(initialContractors);
 
   const [serviceType, setServiceType] = useState<LeadServiceType>('no_cooling');
@@ -106,6 +109,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       setReportSnapshot(defaults.reportSnapshot);
       setHomeownerEmail(defaults.profile?.email ?? user.email ?? '');
       setHomeownerName(defaults.profile?.full_name ?? '');
+      const latestTroubleshooting = await getLatestTroubleshootingSessionForLead(user.id, defaults.system?.id);
+      setTroubleshootingSession(latestTroubleshooting);
     } catch (error: any) {
       Alert.alert('Could not load lead request', error?.message ?? 'Please try again.');
     } finally {
@@ -133,6 +138,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     [routingDecisions]
   );
 
+  const leadReportSnapshot = useMemo(() => ({
+    ...reportSnapshot,
+    troubleshooting: attachTroubleshooting ? buildTroubleshootingSnapshot(troubleshootingSession) : null
+  }), [reportSnapshot, attachTroubleshooting, troubleshootingSession]);
+
   const leadPreview = useMemo(() => buildLeadSummary({
     userId: user?.id ?? '',
     hvacSystemId: system?.id,
@@ -148,8 +158,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     homeownerEmail,
     attachContractorReport: attachReport,
     selectedContractors,
-    reportSnapshot
-  }), [user?.id, system?.id, zipCode, serviceType, urgency, symptomSummary, desiredOutcome, contactPreference, preferredTimeWindow, homeownerName, homeownerPhone, homeownerEmail, attachReport, selectedContractors, reportSnapshot]);
+    reportSnapshot: leadReportSnapshot
+  }), [user?.id, system?.id, zipCode, serviceType, urgency, symptomSummary, desiredOutcome, contactPreference, preferredTimeWindow, homeownerName, homeownerPhone, homeownerEmail, attachReport, selectedContractors, leadReportSnapshot]);
 
   async function submitRequest() {
     if (!user?.id) return;
@@ -183,9 +193,9 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         homeownerEmail,
         attachContractorReport: attachReport,
         selectedContractors,
-        reportSnapshot: attachReport ? reportSnapshot : {}
+        reportSnapshot: attachReport ? leadReportSnapshot : {}
       });
-      Alert.alert('Request submitted', `${routingSummary.summary}\n\nLead status: ${request.lead_status}.`, [
+      Alert.alert('Request submitted', `${routingSummary.summary}\n\nTroubleshooting attached: ${attachTroubleshooting && troubleshootingSession ? 'Yes' : 'No'}\n\nLead status: ${request.lead_status}.`, [
         { text: 'Back Home', onPress: () => navigation.navigate('Home') },
         { text: 'OK' }
       ]);
@@ -215,7 +225,7 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       preferredTimeWindow,
       symptomSummary,
       desiredOutcome,
-      reportSnapshot: attachReport ? reportSnapshot : {}
+      reportSnapshot: attachReport ? leadReportSnapshot : {}
     };
     const leadText = buildStandardizedLeadPacket(packet);
     const phoneScript = buildPhoneScript(packet);
@@ -236,7 +246,7 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Request Contractor Help</Text>
-      <Text style={styles.subtitle}>Send a clean HVAC Truth request with your system details, data plate info, air handler location, and service need.</Text>
+      <Text style={styles.subtitle}>Send a clean HVAC Truth request with your system details, data plate info, air handler location, troubleshooting result, and service need.</Text>
 
       {routedContractor ? (
         <View style={styles.sourceCard}>
@@ -274,11 +284,24 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.switchTitle}>Include Contractor Report</Text>
-            <Text style={styles.helper}>Includes age, size, model/serial numbers, air handler location, access notes, and saved data plate status.</Text>
+            <Text style={styles.helper}>Includes age, size, model/serial numbers, air handler location, access notes, saved data plate status, and optional troubleshooting result.</Text>
           </View>
           <Switch value={attachReport} onValueChange={setAttachReport} />
         </View>
         <ReportMiniCard system={system} zipCode={zipCode} />
+        <View style={styles.troubleshootingCard}>
+          <Text style={styles.troubleshootingTitle}>Latest troubleshooting result</Text>
+          {troubleshootingSession ? (
+            <>
+              <Text style={styles.routeHelper}>{troubleshootingSession.workflow_title} • {troubleshootingSession.severity.toUpperCase()}</Text>
+              <Text style={styles.routeHelper}>{troubleshootingSession.result_summary}</Text>
+              <View style={styles.switchRowCompact}>
+                <Text style={styles.helper}>Attach to this lead packet</Text>
+                <Switch value={attachTroubleshooting} onValueChange={setAttachTroubleshooting} />
+              </View>
+            </>
+          ) : <Text style={styles.helper}>No saved troubleshooting session available. Complete and save a workflow first to attach it here.</Text>}
+        </View>
         <PrimaryButton title="Review Full Report" onPress={() => navigation.navigate('ContractorReport')} />
       </View>
 
@@ -366,8 +389,11 @@ const styles = StyleSheet.create({
   optionTextSelected: { color: '#FFFFFF' },
   helper: { color: '#64748B', fontSize: 14, lineHeight: 20, marginBottom: 10 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
+  switchRowCompact: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginTop: 10 },
   switchTitle: { color: '#0F2E5F', fontWeight: '900', fontSize: 16, marginBottom: 4 },
-  reportCard: { backgroundColor: '#EFF6FF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 6 },
+  reportCard: { backgroundColor: '#EFF6FF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 10 },
+  troubleshootingCard: { backgroundColor: '#F0FDF4', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 10 },
+  troubleshootingTitle: { color: '#14532D', fontWeight: '900', marginBottom: 4 },
   reportTitle: { color: '#0F2E5F', fontWeight: '900', marginBottom: 8 },
   reportLine: { color: '#334155', fontWeight: '700', marginBottom: 4 },
   routingSummaryCard: { backgroundColor: '#F0FDF4', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 10 },
