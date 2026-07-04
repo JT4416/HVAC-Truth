@@ -115,6 +115,7 @@ export async function getContractorDashboardLead(leadRequestId: string) {
     .from('contractor_lead_recipients')
     .select('*, contractor_lead_requests(*)')
     .eq('lead_request_id', leadRequestId)
+    .eq('delivery_method', 'verified_dashboard')
     .in('contractor_id', contractorIds)
     .single();
 
@@ -135,6 +136,7 @@ export async function updateContractorLeadStatus(
     .update({ recipient_status: recipientStatus, updated_at: new Date().toISOString() })
     .eq('contractor_id', contractorId)
     .eq('lead_request_id', leadRequestId)
+    .eq('delivery_method', 'verified_dashboard')
     .select('*')
     .single();
 
