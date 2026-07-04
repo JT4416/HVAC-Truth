@@ -18,6 +18,7 @@ export default function HomeScreen({ navigation }: any) {
       <PrimaryButton title="Request Contractor Help" onPress={() => navigation.navigate('ContractorLeadRequest')} />
       <PrimaryButton title="Claim Contractor Profile" onPress={() => navigation.navigate('ContractorProfileClaim')} />
       <PrimaryButton title="Contractor Dashboard" onPress={() => navigation.navigate('ContractorDashboard')} />
+      <PrimaryButton title="Contractor Claim Review" onPress={() => navigation.navigate('AdminContractorClaimReview')} />
     </View>
   );
 }
