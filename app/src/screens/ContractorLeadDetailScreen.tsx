@@ -64,6 +64,7 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
 
   const report = lead.reportSnapshot || {};
   const troubleshooting = (report as any).troubleshooting;
+  const packet = troubleshooting?.contractorPacket;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -127,6 +128,32 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Contractor packet intelligence</Text>
+        {packet ? (
+          <>
+            <Text style={styles.label}>Severity explanation</Text>
+            <Text style={styles.value}>{String(packet.severityExplanation || 'Not provided')}</Text>
+            <Text style={styles.label}>Professional verification focus</Text>
+            {Array.isArray(packet.professionalVerificationFocus) && packet.professionalVerificationFocus.length
+              ? packet.professionalVerificationFocus.map((item: string) => <Text key={item} style={styles.value}>• {item}</Text>)
+              : <Text style={styles.value}>No focus items provided</Text>}
+            <Text style={styles.label}>Homeowner safety boundary</Text>
+            {Array.isArray(packet.homeownerSafetyBoundary) && packet.homeownerSafetyBoundary.length
+              ? packet.homeownerSafetyBoundary.map((item: string) => <Text key={item} style={styles.warning}>• {item}</Text>)
+              : <Text style={styles.value}>No safety boundary items provided</Text>}
+            <Text style={styles.label}>Suggested safe photos</Text>
+            {Array.isArray(packet.suggestedPhotoPrompts) && packet.suggestedPhotoPrompts.length
+              ? packet.suggestedPhotoPrompts.map((prompt: any) => <Text key={prompt.id} style={styles.value}>• {prompt.label}: {prompt.instruction} Safety: {prompt.safetyNote}</Text>)
+              : <Text style={styles.value}>No photo prompts provided</Text>}
+            <Text style={styles.label}>Safe checklist status</Text>
+            {Array.isArray(packet.safeChecklist) && packet.safeChecklist.length
+              ? packet.safeChecklist.map((item: any) => <Text key={`${item.label}-${item.status}`} style={styles.value}>• {item.label} [{item.status}]: {item.detail}</Text>)
+              : <Text style={styles.value}>No checklist status provided</Text>}
+          </>
+        ) : <Text style={styles.helper}>No contractor packet intelligence attached to this lead.</Text>}
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.sectionTitle}>Lead actions</Text>
         <PrimaryButton title="Accept Lead" onPress={() => handleStatus('accepted')} />
         <PrimaryButton title="Decline Lead" onPress={() => handleStatus('declined')} />
@@ -164,6 +191,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 10 },
   label: { fontSize: 13, fontWeight: '800', color: '#64748B', marginTop: 10, textTransform: 'uppercase' },
   value: { color: '#0F172A', lineHeight: 21, marginTop: 3 },
+  warning: { color: '#991B1B', fontWeight: '800', lineHeight: 21, marginTop: 3 },
   helper: { color: '#64748B', lineHeight: 20 },
   input: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 12, padding: 12, marginBottom: 10, backgroundColor: '#FFFFFF' },
   multiline: { minHeight: 96, textAlignVertical: 'top' },
