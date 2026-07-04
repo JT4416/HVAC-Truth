@@ -16,11 +16,7 @@ export type LeadServiceType =
 export type LeadUrgency = 'emergency_today' | 'within_24_hours' | 'this_week' | 'planning_ahead';
 export type ContactPreference = 'phone' | 'text' | 'email' | 'app_message';
 
-export type SelectedContractor = ContractorContactProfile & {
-  id?: string;
-  verified?: boolean;
-  emergencyService?: boolean;
-};
+export type SelectedContractor = ContractorContactProfile & { id?: string; verified?: boolean; emergencyService?: boolean; };
 
 export type ContractorLeadRequestInput = {
   userId: string;
@@ -70,48 +66,13 @@ export const URGENCY_OPTIONS: { label: string; value: LeadUrgency; note: string 
 ];
 
 export const DEMO_CONTRACTORS: SelectedContractor[] = [
-  {
-    businessName: 'Summit Air Solutions',
-    phone: '(555) 010-4411',
-    website: 'https://example-summit-air.com',
-    contactPageUrl: 'https://example-summit-air.com/contact',
-    publishedEmail: 'service@example-summit-air.com',
-    rating: 4.9,
-    reviewCount: 246,
-    distanceMiles: 0.8,
-    verified: true,
-    emergencyService: true,
-    hvacTruthVerified: true,
-    acceptsDashboardLeads: true
-  },
-  {
-    businessName: 'Coastal Comfort HVAC',
-    phone: '(555) 010-7722',
-    website: 'https://example-coastal-comfort.com',
-    contactPageUrl: 'https://example-coastal-comfort.com/request-service',
-    rating: 4.8,
-    reviewCount: 189,
-    distanceMiles: 1.6,
-    verified: true,
-    emergencyService: true,
-    hvacTruthVerified: false
-  },
-  {
-    businessName: 'Precision Climate Pros',
-    phone: '(555) 010-3838',
-    googleMapsUrl: 'https://maps.google.com',
-    rating: 4.7,
-    reviewCount: 132,
-    distanceMiles: 2.3,
-    verified: true,
-    emergencyService: false,
-    hvacTruthVerified: false
-  }
+  { businessName: 'Summit Air Solutions', phone: '(555) 010-4411', website: 'https://example-summit-air.com', contactPageUrl: 'https://example-summit-air.com/contact', publishedEmail: 'service@example-summit-air.com', rating: 4.9, reviewCount: 246, distanceMiles: 0.8, verified: true, emergencyService: true, hvacTruthVerified: true, acceptsDashboardLeads: true },
+  { businessName: 'Coastal Comfort HVAC', phone: '(555) 010-7722', website: 'https://example-coastal-comfort.com', contactPageUrl: 'https://example-coastal-comfort.com/request-service', rating: 4.8, reviewCount: 189, distanceMiles: 1.6, verified: true, emergencyService: true, hvacTruthVerified: false },
+  { businessName: 'Precision Climate Pros', phone: '(555) 010-3838', googleMapsUrl: 'https://maps.google.com', rating: 4.7, reviewCount: 132, distanceMiles: 2.3, verified: true, emergencyService: false, hvacTruthVerified: false }
 ];
 
 export function createContractorReportSnapshot(system: HvacSystemRecord | null, zipCode: string) {
   if (!system) return { zipCode, profileStatus: 'no_system_saved' };
-
   return {
     zipCode,
     systemType: system.system_type,
@@ -135,6 +96,8 @@ export function createContractorReportSnapshot(system: HvacSystemRecord | null, 
 function buildContractorPacketSummary(reportSnapshot?: Record<string, any>) {
   const packet = reportSnapshot?.troubleshooting?.contractorPacket;
   if (!packet) return [];
+  const photoAttachments = (packet.photoAttachments ?? []) as any[];
+  const photoSummary = packet.photoAttachmentSummary;
 
   return [
     '',
@@ -147,6 +110,10 @@ function buildContractorPacketSummary(reportSnapshot?: Record<string, any>) {
     '',
     'Homeowner safety boundary:',
     ...((packet.homeownerSafetyBoundary ?? []) as string[]).map((item) => `- ${item}`),
+    '',
+    'Safe photo attachment summary:',
+    photoSummary ? `Attached: ${photoSummary.attached}; skipped: ${photoSummary.skipped}; not applicable: ${photoSummary.notApplicable}; unsafe access: ${photoSummary.blocked}; still needed: ${photoSummary.needed}` : 'No photo status summary provided.',
+    ...photoAttachments.map((photo) => `- ${photo.promptLabel}: ${photo.status}${photo.storagePath ? ` (${photo.storageBucket}/${photo.storagePath})` : ''}${photo.skippedReason ? ` — ${photo.skippedReason}` : ''}`),
     '',
     'Suggested safe photos:',
     ...((packet.suggestedPhotoPrompts ?? []) as any[]).map((prompt) => `- ${prompt.label}: ${prompt.instruction}`),
@@ -196,30 +163,25 @@ export async function loadLeadFlowDefaults(userId: string) {
 export async function submitContractorLeadRequest(input: ContractorLeadRequestInput): Promise<LeadRequestRecord> {
   const leadSummary = buildLeadSummary(input);
   const routingDecisions = buildVerifiedLeadRoutingDecisions(input.selectedContractors);
-
-  const { data: request, error } = await supabase
-    .from('contractor_lead_requests')
-    .insert({
-      user_id: input.userId,
-      hvac_system_id: input.hvacSystemId ?? null,
-      zip_code: input.zipCode,
-      service_type: input.serviceType,
-      urgency: input.urgency,
-      symptom_summary: input.symptomSummary,
-      desired_outcome: input.desiredOutcome,
-      contact_preference: input.contactPreference,
-      preferred_time_window: input.preferredTimeWindow ?? null,
-      homeowner_name: input.homeownerName ?? null,
-      homeowner_phone: input.homeownerPhone ?? null,
-      homeowner_email: input.homeownerEmail ?? null,
-      attach_contractor_report: input.attachContractorReport,
-      report_snapshot: input.reportSnapshot ?? {},
-      selected_contractors: input.selectedContractors,
-      lead_summary: leadSummary,
-      lead_status: 'submitted'
-    })
-    .select('*')
-    .single();
+  const { data: request, error } = await supabase.from('contractor_lead_requests').insert({
+    user_id: input.userId,
+    hvac_system_id: input.hvacSystemId ?? null,
+    zip_code: input.zipCode,
+    service_type: input.serviceType,
+    urgency: input.urgency,
+    symptom_summary: input.symptomSummary,
+    desired_outcome: input.desiredOutcome,
+    contact_preference: input.contactPreference,
+    preferred_time_window: input.preferredTimeWindow ?? null,
+    homeowner_name: input.homeownerName ?? null,
+    homeowner_phone: input.homeownerPhone ?? null,
+    homeowner_email: input.homeownerEmail ?? null,
+    attach_contractor_report: input.attachContractorReport,
+    report_snapshot: input.reportSnapshot ?? {},
+    selected_contractors: input.selectedContractors,
+    lead_summary: leadSummary,
+    lead_status: 'submitted'
+  }).select('*').single();
 
   if (error) throw error;
 
