@@ -47,6 +47,10 @@ export default function ContractorFinderScreen({ navigation }: any) {
     await performContactRoute(route, packet, packet);
   }
 
+  function startLeadRequest(contractor: ContractorSearchResult) {
+    navigation?.navigate?.('ContractorLeadRequest', { selectedContractor: contractor });
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Find a Technician</Text>
@@ -99,7 +103,7 @@ export default function ContractorFinderScreen({ navigation }: any) {
             <Pressable style={styles.secondaryButton} onPress={() => openBestRoute(contractor)}>
               <Text style={styles.secondaryButtonText}>Open Contact Route</Text>
             </Pressable>
-            <Pressable style={styles.primarySmallButton} onPress={() => navigation?.navigate?.('ContractorLeadRequest')}>
+            <Pressable style={styles.primarySmallButton} onPress={() => startLeadRequest(contractor)}>
               <Text style={styles.primarySmallButtonText}>Request Help</Text>
             </Pressable>
           </View>
