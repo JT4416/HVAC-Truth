@@ -29,15 +29,16 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V28 — Local Validation and Supabase Migration Hardening**.
+Current stage: **V29 — Claim Review RPC Delivery Method Write-Through**.
 
-V28 adds repeatable local TypeScript validation setup and documents the Supabase migration compatibility review needed before production database application. The repository now includes `app/tsconfig.json` and an `npm run typecheck` script.
+V29 updates the contractor claim approval database flow so verified claims now write delivery/contact routes directly to `contractor_delivery_methods` while preserving legacy compatibility rows in `contractor_lead_preferences` during the transition period.
 
 ## Core Marketplace Rule
 
 ```text
 Verified contractors are either in or out of the HVAC Truth verified network.
 They may set operating limits.
+They may configure delivery/contact routes.
 They may not cherry-pick request categories.
 Packet score remains informational only.
 ```
@@ -171,99 +172,27 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 - Approval creates/updates contractor profile
 - Approval activates verified contractor dashboard access
 
-Run the V13 migration, then bootstrap the first reviewer:
+Bootstrap the first reviewer after running the V13 migration:
 
 ```sql
 insert into public.app_admin_users (user_id, role, active)
 values ('<profile_uuid>', 'owner', true);
 ```
 
-### V14 — Verified Dashboard Lead Routing
+### V14-V16 — Verified Routing and Search-to-Lead Flow
 
-- Verified routing helper
-- Homeowner lead submission routes eligible contractors to dashboard
-- Unverified contractors remain on public-contact routing
-- Dashboard delivery tracking fields
+- Verified dashboard lead routing
+- Persisted contractor discovery
+- Search result to lead request flow
+- Selected contractor metadata preserved through lead submission
 
-Run:
+### V17-V21 — Troubleshooting Workflow and Contractor Packet Intelligence
 
-```text
-backend/supabase/migrations/20260703_v14_verified_dashboard_lead_routing.sql
-```
-
-### V15 — Persisted Contractor Discovery
-
-- Searches internal contractor records
-- Searches Google Places/Yelp when configured
-- Deduplicates provider results
-- Matches or creates contractor records
-- Preserves HVAC Truth verification and dashboard lead flags
-- Returns `contractorId`, `persisted`, and `matchMethod` to the app
-
-Run:
-
-```text
-backend/supabase/migrations/20260703_v15_persisted_contractor_discovery.sql
-```
-
-Then deploy:
-
-```bash
-supabase functions deploy contractor-discovery
-```
-
-### V16 — Search Result to Lead Request
-
-- `Request Help` on a search result navigates to `ContractorLeadRequest`
-- Selected contractor is passed through navigation state
-- Lead request screen replaces the demo list with the selected contractor
-- Contractor ID, verification state, dashboard flags, contact route data, and provider source data are preserved
-
-### V17 — Troubleshooting Workflow Engine
-
-- Replaced the simple troubleshooting evaluator with a homeowner-safe workflow engine
-- Added safe workflows for no cooling, water leak, frozen coil, weak airflow, odor, noise, and quote validation
-- Added safety gates for no electrical testing, no refrigerant work, no bypassing safeties, and no combustion work
-
-Run:
-
-```text
-backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
-```
-
-### V18 — Troubleshooting Session Persistence
-
-- Saves completed troubleshooting sessions to Supabase
-- Shows recent troubleshooting sessions on the troubleshooting screen
-- Adds saved troubleshooting snapshots to contractor reports and lead request packets
-
-### V19 — Troubleshooting Session Controls
-
-- Opens saved troubleshooting sessions from history
-- Lets homeowners label, archive, attach, or hide sessions from contractor reports and lead packets
-- Lets homeowners choose the exact session to attach during lead request submission
-
-Run after V17 migration:
-
-```text
-backend/supabase/migrations/20260703_v19_troubleshooting_session_controls.sql
-```
-
-### V20 — Troubleshooting to Lead Conversion
-
-- Adds **I Tried This, Now Request Help** after completed troubleshooting results
-- Routes to `ContractorLeadRequest` with saved troubleshooting context
-- Prefills service type, urgency, symptom summary, and desired outcome
-
-No new migration is required for V20.
-
-### V21 — Contractor Packet Intelligence
-
-- Adds workflow-specific contractor handoff intelligence
-- Adds severity explanations, professional verification focus, safety summaries, and safe photo prompts
-- Embeds packet intelligence into lead reports and contractor dashboard detail
-
-No new migration is required for V21.
+- Homeowner-safe troubleshooting workflow engine
+- Troubleshooting session persistence and controls
+- Troubleshooting-to-lead conversion
+- Workflow-specific contractor handoff intelligence
+- Severity explanations, safety summaries, professional verification focus, and safe photo prompts
 
 ### V22 — Photo Capture for Contractor Packets
 
@@ -271,19 +200,11 @@ No new migration is required for V21.
 - Uploads packet photos to private Supabase Storage
 - Shows photo status in lead summaries and dashboard detail
 
-Run:
-
-```text
-backend/supabase/migrations/20260704_v22_contractor_packet_photo_storage.sql
-```
-
 ### V23 — Contractor Packet Review and Scoring
 
 - Scores contractor packet completeness before submission and inside contractor dashboard lead detail
 - Adds badges: Complete, Strong, Needs details, and Thin
 - Packet score is informational only
-
-No new migration is required for V23.
 
 ### V24 — Verified Contractor Participation Rules
 
@@ -292,25 +213,11 @@ No new migration is required for V23.
 - Allows service area, emergency availability, pause status, and capacity limits
 - Keeps packet score informational
 
-Run:
-
-```text
-backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
-```
-
 ### V25 — Participation Admin Controls
 
-- Adds `getParticipationContractors()` and `getParticipationContractor(contractorId)`
-- Adds `updateContractorParticipation(input)`
-- Adds `buildAdminParticipationSummary(contractor, zipCode)`
+- Adds admin participation read/update services
 - Adds admin policy/RPC support for participation updates
 - Adds activity/event logging for participation changes
-
-Run after V24:
-
-```text
-backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
-```
 
 ### V26 — Participation Control Screens
 
@@ -328,45 +235,71 @@ backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
 - Updated contractor claim, claim review, and participation settings copy to say delivery methods instead of lead preferences
 - Preserved legacy compatibility paths
 
-Run after V25:
-
-```text
-backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql
-```
-
 ### V28 — Local Validation and Supabase Migration Hardening
 
-New V28 files:
+- Added `app/tsconfig.json`
+- Added `docs/build/V28_VALIDATION_AND_MIGRATION_HARDENING.md`
+- Added repeatable `npm run typecheck` command
+- Added strict Expo-compatible TypeScript configuration
+- Documented Supabase migration compatibility checks for V25 and V27
+
+### V29 — Claim Review RPC Delivery Method Write-Through
+
+New V29 files:
 
 ```text
-app/tsconfig.json
-docs/build/V28_VALIDATION_AND_MIGRATION_HARDENING.md
+backend/supabase/migrations/20260704_v29_claim_review_delivery_method_write_through.sql
+docs/build/V29_CLAIM_REVIEW_DELIVERY_METHOD_WRITE_THROUGH.md
 ```
 
-Updated V28 files:
+Updated V29 files:
 
 ```text
-app/package.json
 README.md
+docs/features/DELIVERY_METHOD_CLEANUP.md
 ```
 
-V28 behavior:
+V29 behavior:
 
-- Adds a repeatable `npm run typecheck` command.
-- Adds a strict Expo-compatible TypeScript configuration.
-- Documents Supabase migration compatibility checks for V25 and V27.
-- Identifies that local TypeScript, Expo, and Supabase CLI validation still need to be run outside the GitHub connector environment.
+- Replaces `public.review_contractor_profile_claim(...)`.
+- Approved claims now write to `public.contractor_delivery_methods`.
+- Legacy compatibility rows are still written to `public.contractor_lead_preferences`.
+- Contractor-level legacy delivery fields remain populated during the transition.
+- Verified dashboard access, contractor service areas, and verified contractor status are preserved.
+
+Run after V27:
+
+```text
+backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
+backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
+backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql
+backend/supabase/migrations/20260704_v29_claim_review_delivery_method_write_through.sql
+```
+
+## Local Validation
+
+Run locally:
+
+```bash
+cd app
+npm install
+npm run typecheck
+npm start
+```
+
+Run Supabase migrations in a clean branch or staging project before production.
 
 ## Next Recommended Build
 
-**V29 — Claim Review RPC Delivery Method Write-Through**
+**V30 — Staging Validation and Claim Approval Test Harness**
 
 Recommended next work:
 
-- Update claim approval database flow so approved claims write directly to `contractor_delivery_methods`.
-- Preserve legacy compatibility fields during the transition period.
+- Run the V24, V25, V27, and V29 migrations in a clean Supabase branch or staging project.
+- Create a seed/test claim for each delivery method.
+- Approve the claim through `review_contractor_profile_claim`.
+- Confirm `contractor_delivery_methods` and legacy compatibility rows match.
 - Run local `npm run typecheck` and Expo validation.
-- Run migrations in a clean Supabase branch or staging project.
 
 ## Active Repository
 
