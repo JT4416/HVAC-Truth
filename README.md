@@ -1,6 +1,6 @@
 # HVAC Truth MVP Starter
 
-HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, contractor-ready photo packet handoffs, packet completeness scoring, and verified contractor participation rules.
+HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, contractor-ready photo packet handoffs, packet completeness scoring, verified contractor participation rules, and participation admin controls.
 
 ## MVP Stack
 
@@ -28,9 +28,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V24 — Verified Contractor Participation Rules**.
+Current stage: **V25 — Participation Admin Controls**.
 
-The app now treats verified contractor dashboard delivery as active network participation plus operating limits. Verified contractors are active or inactive in the HVAC Truth network. Packet score remains informational and does not become a lead-category selection switch.
+The app now has the service and Supabase foundation for owner/admin control of verified contractor participation status, pause/resume, service area, emergency availability, and capacity limits. The all-or-nothing participation standard remains intact: packet score is informational and does not become a lead-category selection switch.
 
 ## Build History
 
@@ -432,11 +432,46 @@ Run:
 backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
 ```
 
+### V25 — Participation Admin Controls
+
+V25 adds the service and Supabase foundation for managing verified contractor participation.
+
+New V25 files:
+
+```text
+app/src/services/contractorParticipationAdmin.ts
+backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
+docs/features/PARTICIPATION_ADMIN_CONTROLS.md
+docs/build/NEXT_BUILD_STEPS_V25.md
+```
+
+Updated V25 files:
+
+```text
+app/src/services/contractorClaimReview.ts
+README.md
+```
+
+V25 behavior:
+
+- Adds `getParticipationContractors()` and `getParticipationContractor(contractorId)`.
+- Adds `updateContractorParticipation(input)`.
+- Adds `buildAdminParticipationSummary(contractor, zipCode)`.
+- Adds admin policy/RPC support for participation updates.
+- Adds activity/event logging for participation changes.
+- Aligns claim review checklist with the participation standard.
+
+Run after V24:
+
+```text
+backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
+```
+
 ## Next Recommended Build
 
-**V25 — Participation Admin Controls**
+**V26 — Participation Control Screens**
 
-Build owner/admin and contractor-facing controls for participation status, service area, emergency availability, pause/resume, and capacity limits.
+Build the visible admin/contractor screens for active/inactive status, pause/resume, service area, emergency availability, and capacity limits.
 
 ## Active Repository
 
