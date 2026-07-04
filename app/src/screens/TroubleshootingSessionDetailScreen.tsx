@@ -4,6 +4,7 @@ import PrimaryButton from '../components/PrimaryButton';
 import {
   TroubleshootingSessionRecord,
   archiveTroubleshootingSession,
+  buildLeadDefaultsFromTroubleshootingSession,
   buildLeadPacketPreview,
   getTroubleshootingSession,
   updateTroubleshootingSessionControls
@@ -40,7 +41,7 @@ export default function TroubleshootingSessionDetailScreen({ route, navigation }
   }
 
   async function saveControls() {
-    if (!session) return;
+    if (!session) return null;
     try {
       setSaving(true);
       const updated = await updateTroubleshootingSessionControls(session.id, {
@@ -50,11 +51,27 @@ export default function TroubleshootingSessionDetailScreen({ route, navigation }
       });
       setSession(updated);
       Alert.alert('Controls saved', 'Troubleshooting handoff controls were updated.');
+      return updated;
     } catch (error: any) {
       Alert.alert('Could not save controls', error?.message ?? 'Please try again.');
+      return null;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function requestHelpFromSession() {
+    if (!session) return;
+    const currentSession = await updateTroubleshootingSessionControls(session.id, {
+      attachToLeadRequest: true,
+      homeownerLabel: label
+    });
+    setSession(currentSession);
+    setAttachLead(true);
+    navigation.navigate('ContractorLeadRequest', {
+      troubleshootingSessionId: currentSession.id,
+      leadDefaults: buildLeadDefaultsFromTroubleshootingSession(currentSession)
+    });
   }
 
   async function archiveSession() {
@@ -119,6 +136,12 @@ export default function TroubleshootingSessionDetailScreen({ route, navigation }
         <PrimaryButton title={saving ? 'Saving...' : 'Save Controls'} onPress={saveControls} />
       </View>
 
+      <View style={styles.leadCard}>
+        <Text style={styles.leadTitle}>Ready to request help?</Text>
+        <Text style={styles.body}>This will open a contractor lead request with this troubleshooting session preselected and the issue summary prefilled.</Text>
+        <PrimaryButton title="I Tried This, Now Request Help" onPress={requestHelpFromSession} />
+      </View>
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Lead packet preview</Text>
         <Text style={styles.preview}>{buildLeadPacketPreview(session)}</Text>
@@ -156,7 +179,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, fontWeight: '900', color: '#0F172A', marginBottom: 8 },
   subtitle: { color: '#475569', fontSize: 16, lineHeight: 23, marginBottom: 16 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#D8E2F0', padding: 16, marginBottom: 14 },
+  leadCard: { backgroundColor: '#ECFDF5', borderRadius: 18, borderWidth: 1, borderColor: '#BBF7D0', padding: 16, marginBottom: 14 },
   sectionTitle: { color: '#0F2E5F', fontWeight: '900', fontSize: 18, marginBottom: 10 },
+  leadTitle: { color: '#14532D', fontWeight: '900', fontSize: 18, marginBottom: 10 },
   badge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '900', color: '#334155', backgroundColor: '#E2E8F0', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, marginBottom: 8 },
   body: { color: '#334155', lineHeight: 22, marginBottom: 5 },
   meta: { color: '#64748B', fontSize: 12, marginTop: 6 },
