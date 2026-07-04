@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -21,6 +22,7 @@ import { ContractorSearchResult } from '../services/contractorDiscovery';
 import {
   TroubleshootingLeadDefaults,
   TroubleshootingSessionRecord,
+  buildContractorPacketIntelligence,
   buildLeadDefaultsFromTroubleshootingSession,
   buildLeadPacketPreview,
   buildTroubleshootingSnapshot,
@@ -29,6 +31,14 @@ import {
   getTroubleshootingSession,
   markTroubleshootingSessionUsed
 } from '../services/troubleshootingSessions';
+import {
+  ContractorPacketPhotoAttachment,
+  attachLocalPhoto,
+  createPhotoAttachmentsFromPrompts,
+  summarizePhotoAttachments,
+  updateAttachmentStatus,
+  uploadPendingContractorPacketPhotos
+} from '../services/contractorPacketPhotos';
 
 const CONTACT_OPTIONS: { label: string; value: ContactPreference }[] = [
   { label: 'Phone', value: 'phone' },
@@ -88,10 +98,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
   const [submitting, setSubmitting] = useState(false);
   const [zipCode, setZipCode] = useState('');
   const [system, setSystem] = useState<HvacSystemRecord | null>(null);
-  const [reportSnapshot, setReportSnapshot] = useState<Record<string, unknown>>({});
+  const [reportSnapshot, setReportSnapshot] = useState<Record<string, any>>({});
   const [troubleshootingSessions, setTroubleshootingSessions] = useState<TroubleshootingSessionRecord[]>([]);
   const [selectedTroubleshootingId, setSelectedTroubleshootingId] = useState<string | null>(routedTroubleshootingSessionId);
   const [attachTroubleshooting, setAttachTroubleshooting] = useState(true);
+  const [photoAttachments, setPhotoAttachments] = useState<ContractorPacketPhotoAttachment[]>([]);
   const [availableContractors, setAvailableContractors] = useState<SelectedContractor[]>(initialContractors);
 
   const [serviceType, setServiceType] = useState<LeadServiceType>(routedLeadDefaults?.serviceType ?? 'no_cooling');
@@ -173,6 +184,15 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     [troubleshootingSessions, selectedTroubleshootingId]
   );
 
+  const packetIntelligence = useMemo(
+    () => buildContractorPacketIntelligence(selectedTroubleshootingSession),
+    [selectedTroubleshootingSession]
+  );
+
+  useEffect(() => {
+    setPhotoAttachments(createPhotoAttachmentsFromPrompts(packetIntelligence?.suggestedPhotoPrompts ?? []));
+  }, [packetIntelligence?.workflowId]);
+
   const recommendedWorkflowId = useMemo(() => getRecommendedWorkflowIdForServiceType(serviceType), [serviceType]);
 
   const routingDecisions = useMemo(
@@ -185,10 +205,19 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     [routingDecisions]
   );
 
-  const leadReportSnapshot = useMemo(() => ({
-    ...reportSnapshot,
-    troubleshooting: attachTroubleshooting ? buildTroubleshootingSnapshot(selectedTroubleshootingSession) : null
-  }), [reportSnapshot, attachTroubleshooting, selectedTroubleshootingSession]);
+  function buildLeadReportSnapshot(attachments = photoAttachments) {
+    const troubleshooting = attachTroubleshooting ? buildTroubleshootingSnapshot(selectedTroubleshootingSession) : null;
+    if (troubleshooting?.contractorPacket) {
+      (troubleshooting.contractorPacket as any).photoAttachments = attachments;
+      (troubleshooting.contractorPacket as any).photoAttachmentSummary = summarizePhotoAttachments(attachments);
+    }
+    return { ...reportSnapshot, troubleshooting };
+  }
+
+  const leadReportSnapshot = useMemo(
+    () => buildLeadReportSnapshot(photoAttachments),
+    [reportSnapshot, attachTroubleshooting, selectedTroubleshootingSession, photoAttachments]
+  );
 
   const leadPreview = useMemo(() => buildLeadSummary({
     userId: user?.id ?? '',
@@ -213,6 +242,28 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     applyLeadDefaults(buildLeadDefaultsFromTroubleshootingSession(selectedTroubleshootingSession));
   }
 
+  async function capturePacketPhoto(promptId: string) {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Camera permission needed', 'HVAC Truth needs camera access to attach safe photos to this contractor packet.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.8, exif: false });
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    setPhotoAttachments((current) => attachLocalPhoto(current, promptId, result.assets[0].uri));
+  }
+
+  function setPacketPhotoStatus(promptId: string, status: 'skipped' | 'not_applicable' | 'blocked_by_safety') {
+    const reason = status === 'blocked_by_safety'
+      ? 'Homeowner could not safely access this photo without crossing a safety boundary.'
+      : status === 'not_applicable'
+        ? 'Photo prompt does not apply to this home or issue.'
+        : 'Homeowner skipped this optional photo.';
+    setPhotoAttachments((current) => updateAttachmentStatus(current, promptId, status, reason));
+  }
+
   async function submitRequest() {
     if (!user?.id) return;
     if (!zipCode.trim()) {
@@ -230,6 +281,14 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
 
     try {
       setSubmitting(true);
+      const uploadedAttachments = await uploadPendingContractorPacketPhotos({
+        userId: user.id,
+        leadDraftId: selectedTroubleshootingSession?.id ?? `lead-${Date.now()}`,
+        attachments: photoAttachments
+      });
+      setPhotoAttachments(uploadedAttachments);
+      const finalReportSnapshot = buildLeadReportSnapshot(uploadedAttachments);
+
       const request = await submitContractorLeadRequest({
         userId: user.id,
         hvacSystemId: system?.id,
@@ -245,12 +304,13 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         homeownerEmail,
         attachContractorReport: attachReport,
         selectedContractors,
-        reportSnapshot: attachReport ? leadReportSnapshot : {}
+        reportSnapshot: attachReport ? finalReportSnapshot : {}
       });
       if (attachTroubleshooting && selectedTroubleshootingSession) {
         await markTroubleshootingSessionUsed(selectedTroubleshootingSession.id, 'lead');
       }
-      Alert.alert('Request submitted', `${routingSummary.summary}\n\nTroubleshooting attached: ${attachTroubleshooting && selectedTroubleshootingSession ? 'Yes' : 'No'}\n\nLead status: ${request.lead_status}.`, [
+      const photoSummary = summarizePhotoAttachments(uploadedAttachments);
+      Alert.alert('Request submitted', `${routingSummary.summary}\n\nTroubleshooting attached: ${attachTroubleshooting && selectedTroubleshootingSession ? 'Yes' : 'No'}\nPhotos attached: ${photoSummary.attached}\nLead status: ${request.lead_status}.`, [
         { text: 'Back Home', onPress: () => navigation.navigate('Home') },
         { text: 'OK' }
       ]);
@@ -294,28 +354,15 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     );
   }
 
-  if (loading) {
-    return <View style={styles.loading}><ActivityIndicator size="large" color="#0B66E4" /></View>;
-  }
+  if (loading) return <View style={styles.loading}><ActivityIndicator size="large" color="#0B66E4" /></View>;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Request Contractor Help</Text>
-      <Text style={styles.subtitle}>Send a clean HVAC Truth request with your system details, data plate info, air handler location, troubleshooting result, and service need.</Text>
+      <Text style={styles.subtitle}>Send a clean HVAC Truth request with your system details, air handler location, troubleshooting result, safe photos, and service need.</Text>
 
-      {routedContractor ? (
-        <View style={styles.sourceCard}>
-          <Text style={styles.sourceTitle}>Started from contractor search</Text>
-          <Text style={styles.routeHelper}>{routedContractor.businessName} is preselected from the search results. Contractor ID, verification flags, source IDs, and contact route data will carry into this lead request.</Text>
-        </View>
-      ) : null}
-
-      {routedTroubleshootingSessionId ? (
-        <View style={styles.troubleshootingSourceCard}>
-          <Text style={styles.troubleshootingSourceTitle}>Started from troubleshooting</Text>
-          <Text style={styles.routeHelper}>HVAC Truth preselected the saved troubleshooting session, attached it to this lead packet, and filled in the service type, urgency, issue summary, and desired contractor outcome.</Text>
-        </View>
-      ) : null}
+      {routedContractor ? <View style={styles.sourceCard}><Text style={styles.sourceTitle}>Started from contractor search</Text><Text style={styles.routeHelper}>{routedContractor.businessName} is preselected from the search results.</Text></View> : null}
+      {routedTroubleshootingSessionId ? <View style={styles.troubleshootingSourceCard}><Text style={styles.troubleshootingSourceTitle}>Started from troubleshooting</Text><Text style={styles.routeHelper}>HVAC Truth preselected the saved troubleshooting session and filled in the lead request.</Text></View> : null}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>1. What do you need?</Text>
@@ -348,20 +395,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>3. Attach system report</Text>
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.switchTitle}>Include Contractor Report</Text>
-            <Text style={styles.helper}>Includes age, size, model/serial numbers, air handler location, access notes, saved data plate status, and optional troubleshooting result.</Text>
-          </View>
-          <Switch value={attachReport} onValueChange={setAttachReport} />
-        </View>
+        <View style={styles.switchRow}><View style={{ flex: 1 }}><Text style={styles.switchTitle}>Include Contractor Report</Text><Text style={styles.helper}>Includes age, size, model/serial numbers, air handler location, access notes, troubleshooting result, and optional safe photos.</Text></View><Switch value={attachReport} onValueChange={setAttachReport} /></View>
         <ReportMiniCard system={system} zipCode={zipCode} />
         <View style={styles.troubleshootingCard}>
           <Text style={styles.troubleshootingTitle}>Choose troubleshooting result</Text>
-          <View style={styles.switchRowCompact}>
-            <Text style={styles.helper}>Attach troubleshooting to this lead packet</Text>
-            <Switch value={attachTroubleshooting} onValueChange={setAttachTroubleshooting} />
-          </View>
+          <View style={styles.switchRowCompact}><Text style={styles.helper}>Attach troubleshooting to this lead packet</Text><Switch value={attachTroubleshooting} onValueChange={setAttachTroubleshooting} /></View>
           {!troubleshootingSessions.length ? <Text style={styles.helper}>No saved troubleshooting session available. Complete and save a workflow first to attach it here.</Text> : null}
           {troubleshootingSessions.map((session) => {
             const selected = selectedTroubleshootingId === session.id;
@@ -372,13 +410,32 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
                 <Text style={styles.routeHelper}>{session.result_summary ?? 'No summary saved'}</Text>
                 <Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected for packet' : 'Tap to select'}</Text>
                 {selected ? <Pressable onPress={useSelectedTroubleshootingAsDefaults}><Text style={styles.manageLink}>Use this session to fill lead details</Text></Pressable> : null}
-                <Pressable onPress={() => navigation.navigate('TroubleshootingSessionDetail', { sessionId: session.id })}>
-                  <Text style={styles.manageLink}>Manage controls</Text>
-                </Pressable>
+                <Pressable onPress={() => navigation.navigate('TroubleshootingSessionDetail', { sessionId: session.id })}><Text style={styles.manageLink}>Manage controls</Text></Pressable>
               </Pressable>
             );
           })}
           <Text style={styles.preview}>{buildLeadPacketPreview(attachTroubleshooting ? selectedTroubleshootingSession : null)}</Text>
+        </View>
+
+        <View style={styles.photoPromptCard}>
+          <Text style={styles.photoPromptTitle}>Safe photos for contractor packet</Text>
+          <Text style={styles.helper}>Optional photos help the contractor price and prepare. Only take photos from safe, visible areas. Never open panels, wiring compartments, or bypass safeties.</Text>
+          {!photoAttachments.length ? <Text style={styles.helper}>Select a troubleshooting session to see recommended safe photos.</Text> : null}
+          {photoAttachments.map((attachment) => (
+            <View key={attachment.promptId} style={styles.photoItem}>
+              <Text style={styles.sessionTitle}>{attachment.promptLabel}</Text>
+              <Text style={styles.routeHelper}>{attachment.instruction}</Text>
+              <Text style={styles.safetyText}>Safety: {attachment.safetyNote}</Text>
+              {attachment.localUri || attachment.signedUrl ? <Image source={{ uri: attachment.localUri || attachment.signedUrl }} style={styles.photoPreview} /> : null}
+              <Text style={styles.routeHelper}>Status: {attachment.status}{attachment.skippedReason ? ` — ${attachment.skippedReason}` : ''}</Text>
+              <View style={styles.photoActions}>
+                <Pressable style={styles.photoButton} onPress={() => capturePacketPhoto(attachment.promptId)}><Text style={styles.photoButtonText}>{attachment.localUri || attachment.signedUrl ? 'Retake' : 'Take photo'}</Text></Pressable>
+                <Pressable style={styles.photoButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'skipped')}><Text style={styles.photoButtonText}>Skip</Text></Pressable>
+                <Pressable style={styles.photoButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'not_applicable')}><Text style={styles.photoButtonText}>N/A</Text></Pressable>
+                <Pressable style={styles.safetyButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'blocked_by_safety')}><Text style={styles.safetyButtonText}>Unsafe access</Text></Pressable>
+              </View>
+            </View>
+          ))}
         </View>
         <PrimaryButton title="Review Full Report" onPress={() => navigation.navigate('ContractorReport')} />
       </View>
@@ -386,10 +443,7 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>4. Choose contractors</Text>
         <Text style={styles.helper}>{routedContractor ? 'Selected from contractor search. You can remove it before submitting if needed.' : 'MVP demo list. Use Find a Technician first to send a real persisted contractor record into this request.'}</Text>
-        <View style={styles.routingSummaryCard}>
-          <Text style={styles.routingSummaryTitle}>Verified routing preview</Text>
-          <Text style={styles.routeHelper}>{routingSummary.summary}</Text>
-        </View>
+        <View style={styles.routingSummaryCard}><Text style={styles.routingSummaryTitle}>Verified routing preview</Text><Text style={styles.routeHelper}>{routingSummary.summary}</Text></View>
         {availableContractors.map((contractor) => {
           const selected = selectedKeys.includes(contractorKey(contractor));
           const decision = buildVerifiedLeadRoutingDecisions([contractor])[0];
@@ -400,10 +454,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
                 <Text style={styles.contractorName}>{contractor.businessName}</Text>
                 <Text style={styles.contractorMeta}>★ {contractor.rating ?? 'No rating'} ({contractor.reviewCount ?? 0} reviews) • {contractor.distanceMiles ?? '?'} mi</Text>
                 <Text style={styles.badges}>{contractor.verified ? 'License/listing verified' : 'Listing not verified'} • {contractor.emergencyService ? 'Emergency service' : 'Standard hours'}</Text>
-                {contractor.contractorId || contractor.id ? <Text style={styles.routeHelper}>Contractor ID: {(contractor.contractorId ?? contractor.id ?? '').slice(0, 8)}...</Text> : null}
                 <Text style={decision.dashboardReady ? styles.dashboardRouteText : styles.routeText}>Best route: {route.label}</Text>
                 <Text style={styles.routeHelper}>{decision.reason}</Text>
-                <Text style={styles.routeHelper}>{route.instructions}</Text>
               </View>
               <Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected' : 'Select'}</Text>
             </Pressable>
@@ -411,10 +463,7 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         })}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>5. Preview</Text>
-        <Text style={styles.preview}>{leadPreview}</Text>
-      </View>
+      <View style={styles.section}><Text style={styles.sectionTitle}>5. Preview</Text><Text style={styles.preview}>{leadPreview}</Text></View>
 
       <PrimaryButton title={submitting ? 'Submitting...' : 'Submit Lead Request'} onPress={submitRequest} />
       <PrimaryButton title="Preview Contact Routing" onPress={previewContactRouting} />
@@ -424,28 +473,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
 }
 
 function OptionGrid({ options, selected, onSelect }: { options: { label: string; value: string; note?: string; contractorContext?: string }[]; selected: string; onSelect: (value: string) => void }) {
-  return (
-    <View style={styles.optionWrap}>
-      {options.map((option) => (
-        <Pressable key={option.value} style={[styles.option, selected === option.value && styles.optionSelected]} onPress={() => onSelect(option.value)}>
-          <Text style={[styles.optionText, selected === option.value && styles.optionTextSelected]}>{option.label}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
+  return <View style={styles.optionWrap}>{options.map((option) => <Pressable key={option.value} style={[styles.option, selected === option.value && styles.optionSelected]} onPress={() => onSelect(option.value)}><Text style={[styles.optionText, selected === option.value && styles.optionTextSelected]}>{option.label}</Text></Pressable>)}</View>;
 }
 
 function ReportMiniCard({ system, zipCode }: { system: HvacSystemRecord | null; zipCode: string }) {
-  return (
-    <View style={styles.reportCard}>
-      <Text style={styles.reportTitle}>Attached report snapshot</Text>
-      <Text style={styles.reportLine}>ZIP: {zipCode || 'Not provided'}</Text>
-      <Text style={styles.reportLine}>System: {safe(system?.system_type)} • {safe(system?.brand)}</Text>
-      <Text style={styles.reportLine}>Age/size: {safe(system?.estimated_age_years)} years • {safe(system?.tonnage)} tons</Text>
-      <Text style={styles.reportLine}>Air handler: {safe(system?.air_handler_location)}</Text>
-      <Text style={styles.reportLine}>Access notes: {safe(system?.access_notes)}</Text>
-    </View>
-  );
+  return <View style={styles.reportCard}><Text style={styles.reportTitle}>Attached report snapshot</Text><Text style={styles.reportLine}>ZIP: {zipCode || 'Not provided'}</Text><Text style={styles.reportLine}>System: {safe(system?.system_type)} • {safe(system?.brand)}</Text><Text style={styles.reportLine}>Age/size: {safe(system?.estimated_age_years)} years • {safe(system?.tonnage)} tons</Text><Text style={styles.reportLine}>Air handler: {safe(system?.air_handler_location)}</Text><Text style={styles.reportLine}>Access notes: {safe(system?.access_notes)}</Text></View>;
 }
 
 const styles = StyleSheet.create({
@@ -474,6 +506,16 @@ const styles = StyleSheet.create({
   reportCard: { backgroundColor: '#EFF6FF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 10 },
   troubleshootingCard: { backgroundColor: '#F0FDF4', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 10 },
   troubleshootingTitle: { color: '#14532D', fontWeight: '900', marginBottom: 4 },
+  photoPromptCard: { backgroundColor: '#FFFBEB', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 10 },
+  photoPromptTitle: { color: '#92400E', fontWeight: '900', marginBottom: 4 },
+  photoItem: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#FDE68A', padding: 12, marginTop: 8 },
+  photoPreview: { height: 140, borderRadius: 12, marginTop: 8, backgroundColor: '#E2E8F0' },
+  photoActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  photoButton: { borderRadius: 999, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#0B66E4' },
+  photoButtonText: { color: '#FFFFFF', fontWeight: '900' },
+  safetyButton: { borderRadius: 999, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FDBA74' },
+  safetyButtonText: { color: '#9A3412', fontWeight: '900' },
+  safetyText: { color: '#9A3412', fontWeight: '800', marginTop: 4, lineHeight: 18, fontSize: 12 },
   sessionCard: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#CBD5E1', padding: 12, marginTop: 8 },
   sessionCardSelected: { borderColor: '#15803D', backgroundColor: '#ECFDF5' },
   sessionTitle: { color: '#0F172A', fontWeight: '900', marginBottom: 4 },
