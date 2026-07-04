@@ -39,6 +39,7 @@ import {
   updateAttachmentStatus,
   uploadPendingContractorPacketPhotos
 } from '../services/contractorPacketPhotos';
+import { buildContractorPacketScore, buildPacketScoreText } from '../services/contractorPacketScoring';
 
 const CONTACT_OPTIONS: { label: string; value: ContactPreference }[] = [
   { label: 'Phone', value: 'phone' },
@@ -117,9 +118,7 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
   const [attachReport, setAttachReport] = useState(true);
   const [selectedKeys, setSelectedKeys] = useState<string[]>(initialContractors.slice(0, routedContractor ? 1 : 2).map(contractorKey));
 
-  useEffect(() => {
-    loadDefaults();
-  }, [user?.id, routedTroubleshootingSessionId]);
+  useEffect(() => { loadDefaults(); }, [user?.id, routedTroubleshootingSessionId]);
 
   useEffect(() => {
     const nextContractor = searchResultToSelectedContractor(route?.params?.selectedContractor);
@@ -151,13 +150,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       setReportSnapshot(defaults.reportSnapshot);
       setHomeownerEmail(defaults.profile?.email ?? user.email ?? '');
       setHomeownerName(defaults.profile?.full_name ?? '');
-
       const sessions = await getRecentTroubleshootingSessions(user.id, 8);
       let routedSession: TroubleshootingSessionRecord | null = null;
       if (routedTroubleshootingSessionId && !sessions.some((session) => session.id === routedTroubleshootingSessionId)) {
         routedSession = await getTroubleshootingSession(routedTroubleshootingSessionId);
       }
-
       const mergedSessions = mergeUniqueSessions(sessions, routedSession);
       const leadEligible = mergedSessions.find((session) => session.attach_to_lead_request);
       setTroubleshootingSessions(mergedSessions);
@@ -174,50 +171,45 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     setSelectedKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
   }
 
-  const selectedContractors = useMemo(
-    () => availableContractors.filter((contractor) => selectedKeys.includes(contractorKey(contractor))),
-    [availableContractors, selectedKeys]
-  );
-
-  const selectedTroubleshootingSession = useMemo(
-    () => troubleshootingSessions.find((session) => session.id === selectedTroubleshootingId) ?? null,
-    [troubleshootingSessions, selectedTroubleshootingId]
-  );
-
-  const packetIntelligence = useMemo(
-    () => buildContractorPacketIntelligence(selectedTroubleshootingSession),
-    [selectedTroubleshootingSession]
-  );
+  const selectedContractors = useMemo(() => availableContractors.filter((contractor) => selectedKeys.includes(contractorKey(contractor))), [availableContractors, selectedKeys]);
+  const selectedTroubleshootingSession = useMemo(() => troubleshootingSessions.find((session) => session.id === selectedTroubleshootingId) ?? null, [troubleshootingSessions, selectedTroubleshootingId]);
+  const packetIntelligence = useMemo(() => buildContractorPacketIntelligence(selectedTroubleshootingSession), [selectedTroubleshootingSession]);
 
   useEffect(() => {
     setPhotoAttachments(createPhotoAttachmentsFromPrompts(packetIntelligence?.suggestedPhotoPrompts ?? []));
   }, [packetIntelligence?.workflowId]);
 
   const recommendedWorkflowId = useMemo(() => getRecommendedWorkflowIdForServiceType(serviceType), [serviceType]);
-
-  const routingDecisions = useMemo(
-    () => buildVerifiedLeadRoutingDecisions(selectedContractors),
-    [selectedContractors]
-  );
-
-  const routingSummary = useMemo(
-    () => getDashboardRoutingSummary(routingDecisions),
-    [routingDecisions]
-  );
+  const routingDecisions = useMemo(() => buildVerifiedLeadRoutingDecisions(selectedContractors), [selectedContractors]);
+  const routingSummary = useMemo(() => getDashboardRoutingSummary(routingDecisions), [routingDecisions]);
 
   function buildLeadReportSnapshot(attachments = photoAttachments) {
     const troubleshooting = attachTroubleshooting ? buildTroubleshootingSnapshot(selectedTroubleshootingSession) : null;
     if (troubleshooting?.contractorPacket) {
-      (troubleshooting.contractorPacket as any).photoAttachments = attachments;
-      (troubleshooting.contractorPacket as any).photoAttachmentSummary = summarizePhotoAttachments(attachments);
+      const contractorPacket = troubleshooting.contractorPacket as any;
+      contractorPacket.photoAttachments = attachments;
+      contractorPacket.photoAttachmentSummary = summarizePhotoAttachments(attachments);
     }
     return { ...reportSnapshot, troubleshooting };
   }
 
-  const leadReportSnapshot = useMemo(
-    () => buildLeadReportSnapshot(photoAttachments),
-    [reportSnapshot, attachTroubleshooting, selectedTroubleshootingSession, photoAttachments]
-  );
+  const leadReportSnapshot = useMemo(() => buildLeadReportSnapshot(photoAttachments), [reportSnapshot, attachTroubleshooting, selectedTroubleshootingSession, photoAttachments]);
+
+  const packetScore = useMemo(() => buildContractorPacketScore({
+    zipCode,
+    contactPreference,
+    homeownerPhone,
+    homeownerEmail,
+    symptomSummary,
+    desiredOutcome,
+    reportSnapshot: leadReportSnapshot,
+    selectedContractorCount: selectedContractors.length
+  }), [zipCode, contactPreference, homeownerPhone, homeownerEmail, symptomSummary, desiredOutcome, leadReportSnapshot, selectedContractors.length]);
+
+  const scoredLeadReportSnapshot = useMemo(() => ({
+    ...leadReportSnapshot,
+    packetScore
+  }), [leadReportSnapshot, packetScore]);
 
   const leadPreview = useMemo(() => buildLeadSummary({
     userId: user?.id ?? '',
@@ -234,8 +226,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     homeownerEmail,
     attachContractorReport: attachReport,
     selectedContractors,
-    reportSnapshot: leadReportSnapshot
-  }), [user?.id, system?.id, zipCode, serviceType, urgency, symptomSummary, desiredOutcome, contactPreference, preferredTimeWindow, homeownerName, homeownerPhone, homeownerEmail, attachReport, selectedContractors, leadReportSnapshot]);
+    reportSnapshot: scoredLeadReportSnapshot
+  }), [user?.id, system?.id, zipCode, serviceType, urgency, symptomSummary, desiredOutcome, contactPreference, preferredTimeWindow, homeownerName, homeownerPhone, homeownerEmail, attachReport, selectedContractors, scoredLeadReportSnapshot]);
 
   function useSelectedTroubleshootingAsDefaults() {
     if (!selectedTroubleshootingSession) return;
@@ -248,10 +240,8 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       Alert.alert('Camera permission needed', 'HVAC Truth needs camera access to attach safe photos to this contractor packet.');
       return;
     }
-
     const result = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.8, exif: false });
     if (result.canceled || !result.assets?.[0]?.uri) return;
-
     setPhotoAttachments((current) => attachLocalPhoto(current, promptId, result.assets[0].uri));
   }
 
@@ -281,13 +271,20 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
 
     try {
       setSubmitting(true);
-      const uploadedAttachments = await uploadPendingContractorPacketPhotos({
-        userId: user.id,
-        leadDraftId: selectedTroubleshootingSession?.id ?? `lead-${Date.now()}`,
-        attachments: photoAttachments
-      });
+      const uploadedAttachments = await uploadPendingContractorPacketPhotos({ userId: user.id, leadDraftId: selectedTroubleshootingSession?.id ?? `lead-${Date.now()}`, attachments: photoAttachments });
       setPhotoAttachments(uploadedAttachments);
-      const finalReportSnapshot = buildLeadReportSnapshot(uploadedAttachments);
+      const finalReportSnapshotBase = buildLeadReportSnapshot(uploadedAttachments);
+      const finalPacketScore = buildContractorPacketScore({
+        zipCode,
+        contactPreference,
+        homeownerPhone,
+        homeownerEmail,
+        symptomSummary,
+        desiredOutcome,
+        reportSnapshot: finalReportSnapshotBase,
+        selectedContractorCount: selectedContractors.length
+      });
+      const finalReportSnapshot = { ...finalReportSnapshotBase, packetScore: finalPacketScore };
 
       const request = await submitContractorLeadRequest({
         userId: user.id,
@@ -306,11 +303,9 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         selectedContractors,
         reportSnapshot: attachReport ? finalReportSnapshot : {}
       });
-      if (attachTroubleshooting && selectedTroubleshootingSession) {
-        await markTroubleshootingSessionUsed(selectedTroubleshootingSession.id, 'lead');
-      }
+      if (attachTroubleshooting && selectedTroubleshootingSession) await markTroubleshootingSessionUsed(selectedTroubleshootingSession.id, 'lead');
       const photoSummary = summarizePhotoAttachments(uploadedAttachments);
-      Alert.alert('Request submitted', `${routingSummary.summary}\n\nTroubleshooting attached: ${attachTroubleshooting && selectedTroubleshootingSession ? 'Yes' : 'No'}\nPhotos attached: ${photoSummary.attached}\nLead status: ${request.lead_status}.`, [
+      Alert.alert('Request submitted', `${routingSummary.summary}\n\nPacket score: ${finalPacketScore.percent}% (${finalPacketScore.contractorBadge})\nTroubleshooting attached: ${attachTroubleshooting && selectedTroubleshootingSession ? 'Yes' : 'No'}\nPhotos attached: ${photoSummary.attached}\nLead status: ${request.lead_status}.`, [
         { text: 'Back Home', onPress: () => navigation.navigate('Home') },
         { text: 'OK' }
       ]);
@@ -329,29 +324,13 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     }
     const serviceLabel = SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label ?? serviceType;
     const route = getLeadDeliveryRoute(firstContractor);
-    const packet = {
-      serviceTypeLabel: serviceLabel,
-      urgency,
-      zipCode,
-      homeownerName,
-      homeownerPhone,
-      homeownerEmail,
-      contactPreference,
-      preferredTimeWindow,
-      symptomSummary,
-      desiredOutcome,
-      reportSnapshot: attachReport ? leadReportSnapshot : {}
-    };
+    const packet = { serviceTypeLabel: serviceLabel, urgency, zipCode, homeownerName, homeownerPhone, homeownerEmail, contactPreference, preferredTimeWindow, symptomSummary, desiredOutcome, reportSnapshot: attachReport ? scoredLeadReportSnapshot : {} };
     const leadText = buildStandardizedLeadPacket(packet);
     const phoneScript = buildPhoneScript(packet);
-    Alert.alert(
-      `Best route: ${route.label}`,
-      `${route.instructions}\n\nThis preview will open the available contact route or share sheet for the first selected contractor.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Preview', onPress: async () => performContactRoute(route, leadText, phoneScript) }
-      ]
-    );
+    Alert.alert(`Best route: ${route.label}`, `${route.instructions}\n\nThis preview will open the available contact route or share sheet for the first selected contractor.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Preview', onPress: async () => performContactRoute(route, leadText, phoneScript) }
+    ]);
   }
 
   if (loading) return <View style={styles.loading}><ActivityIndicator size="large" color="#0B66E4" /></View>;
@@ -359,43 +338,40 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Request Contractor Help</Text>
-      <Text style={styles.subtitle}>Send a clean HVAC Truth request with your system details, air handler location, troubleshooting result, safe photos, and service need.</Text>
+      <Text style={styles.subtitle}>Send a clean HVAC Truth request with system details, air handler location, troubleshooting, safe photos, and packet score.</Text>
 
       {routedContractor ? <View style={styles.sourceCard}><Text style={styles.sourceTitle}>Started from contractor search</Text><Text style={styles.routeHelper}>{routedContractor.businessName} is preselected from the search results.</Text></View> : null}
       {routedTroubleshootingSessionId ? <View style={styles.troubleshootingSourceCard}><Text style={styles.troubleshootingSourceTitle}>Started from troubleshooting</Text><Text style={styles.routeHelper}>HVAC Truth preselected the saved troubleshooting session and filled in the lead request.</Text></View> : null}
 
+      <View style={styles.scoreCard}>
+        <Text style={styles.scoreTitle}>Packet score: {packetScore.percent}% — {packetScore.label}</Text>
+        <Text style={styles.scoreBadge}>Contractor badge: {packetScore.contractorBadge}</Text>
+        <Text style={styles.routeHelper}>{packetScore.summary}</Text>
+        {packetScore.missingHighValueFields.length ? <Text style={styles.warningText}>Missing high-value fields: {packetScore.missingHighValueFields.join(', ')}</Text> : <Text style={styles.goodText}>High-value contractor fields are mostly covered.</Text>}
+        {packetScore.warnings.slice(0, 3).map((warning) => <Text key={warning} style={styles.warningText}>• {warning}</Text>)}
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>1. What do you need?</Text>
         <OptionGrid options={SERVICE_TYPE_OPTIONS} selected={serviceType} onSelect={(value) => setServiceType(value as LeadServiceType)} />
-        <View style={styles.recommendationCard}>
-          <Text style={styles.recommendationTitle}>Recommended troubleshooting workflow</Text>
-          <Text style={styles.routeHelper}>Based on this service type, HVAC Truth recommends workflow ID: {recommendedWorkflowId}</Text>
-          <PrimaryButton title="Open Troubleshooting" onPress={() => navigation.navigate('Troubleshooting')} />
-        </View>
-        <Text style={styles.label}>What is happening?</Text>
-        <TextInput style={[styles.input, styles.textArea]} multiline value={symptomSummary} onChangeText={setSymptomSummary} />
-        <Text style={styles.label}>What outcome do you want?</Text>
-        <TextInput style={[styles.input, styles.textArea]} multiline value={desiredOutcome} onChangeText={setDesiredOutcome} />
+        <View style={styles.recommendationCard}><Text style={styles.recommendationTitle}>Recommended troubleshooting workflow</Text><Text style={styles.routeHelper}>Based on this service type, HVAC Truth recommends workflow ID: {recommendedWorkflowId}</Text><PrimaryButton title="Open Troubleshooting" onPress={() => navigation.navigate('Troubleshooting')} /></View>
+        <Text style={styles.label}>What is happening?</Text><TextInput style={[styles.input, styles.textArea]} multiline value={symptomSummary} onChangeText={setSymptomSummary} />
+        <Text style={styles.label}>What outcome do you want?</Text><TextInput style={[styles.input, styles.textArea]} multiline value={desiredOutcome} onChangeText={setDesiredOutcome} />
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>2. Urgency and contact</Text>
         <OptionGrid options={URGENCY_OPTIONS} selected={urgency} onSelect={(value) => setUrgency(value as LeadUrgency)} />
-        <Text style={styles.label}>Preferred time window</Text>
-        <TextInput style={styles.input} value={preferredTimeWindow} onChangeText={setPreferredTimeWindow} placeholder="Example: Today after 3 PM" />
-        <Text style={styles.label}>Preferred contact method</Text>
-        <OptionGrid options={CONTACT_OPTIONS} selected={contactPreference} onSelect={(value) => setContactPreference(value as ContactPreference)} />
-        <Text style={styles.label}>Name</Text>
-        <TextInput style={styles.input} value={homeownerName} onChangeText={setHomeownerName} placeholder="Homeowner name" />
-        <Text style={styles.label}>Phone</Text>
-        <TextInput style={styles.input} value={homeownerPhone} onChangeText={setHomeownerPhone} placeholder="Phone number" keyboardType="phone-pad" />
-        <Text style={styles.label}>Email</Text>
-        <TextInput style={styles.input} value={homeownerEmail} onChangeText={setHomeownerEmail} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" />
+        <Text style={styles.label}>Preferred time window</Text><TextInput style={styles.input} value={preferredTimeWindow} onChangeText={setPreferredTimeWindow} placeholder="Example: Today after 3 PM" />
+        <Text style={styles.label}>Preferred contact method</Text><OptionGrid options={CONTACT_OPTIONS} selected={contactPreference} onSelect={(value) => setContactPreference(value as ContactPreference)} />
+        <Text style={styles.label}>Name</Text><TextInput style={styles.input} value={homeownerName} onChangeText={setHomeownerName} placeholder="Homeowner name" />
+        <Text style={styles.label}>Phone</Text><TextInput style={styles.input} value={homeownerPhone} onChangeText={setHomeownerPhone} placeholder="Phone number" keyboardType="phone-pad" />
+        <Text style={styles.label}>Email</Text><TextInput style={styles.input} value={homeownerEmail} onChangeText={setHomeownerEmail} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" />
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>3. Attach system report</Text>
-        <View style={styles.switchRow}><View style={{ flex: 1 }}><Text style={styles.switchTitle}>Include Contractor Report</Text><Text style={styles.helper}>Includes age, size, model/serial numbers, air handler location, access notes, troubleshooting result, and optional safe photos.</Text></View><Switch value={attachReport} onValueChange={setAttachReport} /></View>
+        <View style={styles.switchRow}><View style={{ flex: 1 }}><Text style={styles.switchTitle}>Include Contractor Report</Text><Text style={styles.helper}>Includes system details, air handler location, troubleshooting, safe photos, and packet score.</Text></View><Switch value={attachReport} onValueChange={setAttachReport} /></View>
         <ReportMiniCard system={system} zipCode={zipCode} />
         <View style={styles.troubleshootingCard}>
           <Text style={styles.troubleshootingTitle}>Choose troubleshooting result</Text>
@@ -403,39 +379,15 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
           {!troubleshootingSessions.length ? <Text style={styles.helper}>No saved troubleshooting session available. Complete and save a workflow first to attach it here.</Text> : null}
           {troubleshootingSessions.map((session) => {
             const selected = selectedTroubleshootingId === session.id;
-            return (
-              <Pressable key={session.id} style={[styles.sessionCard, selected && styles.sessionCardSelected]} onPress={() => setSelectedTroubleshootingId(session.id)}>
-                <Text style={styles.sessionTitle}>{session.homeowner_label || session.workflow_title}</Text>
-                <Text style={styles.routeHelper}>{session.workflow_title} • {session.severity.toUpperCase()}</Text>
-                <Text style={styles.routeHelper}>{session.result_summary ?? 'No summary saved'}</Text>
-                <Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected for packet' : 'Tap to select'}</Text>
-                {selected ? <Pressable onPress={useSelectedTroubleshootingAsDefaults}><Text style={styles.manageLink}>Use this session to fill lead details</Text></Pressable> : null}
-                <Pressable onPress={() => navigation.navigate('TroubleshootingSessionDetail', { sessionId: session.id })}><Text style={styles.manageLink}>Manage controls</Text></Pressable>
-              </Pressable>
-            );
+            return <Pressable key={session.id} style={[styles.sessionCard, selected && styles.sessionCardSelected]} onPress={() => setSelectedTroubleshootingId(session.id)}><Text style={styles.sessionTitle}>{session.homeowner_label || session.workflow_title}</Text><Text style={styles.routeHelper}>{session.workflow_title} • {session.severity.toUpperCase()}</Text><Text style={styles.routeHelper}>{session.result_summary ?? 'No summary saved'}</Text><Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected for packet' : 'Tap to select'}</Text>{selected ? <Pressable onPress={useSelectedTroubleshootingAsDefaults}><Text style={styles.manageLink}>Use this session to fill lead details</Text></Pressable> : null}<Pressable onPress={() => navigation.navigate('TroubleshootingSessionDetail', { sessionId: session.id })}><Text style={styles.manageLink}>Manage controls</Text></Pressable></Pressable>;
           })}
           <Text style={styles.preview}>{buildLeadPacketPreview(attachTroubleshooting ? selectedTroubleshootingSession : null)}</Text>
         </View>
-
         <View style={styles.photoPromptCard}>
           <Text style={styles.photoPromptTitle}>Safe photos for contractor packet</Text>
           <Text style={styles.helper}>Optional photos help the contractor price and prepare. Only take photos from safe, visible areas. Never open panels, wiring compartments, or bypass safeties.</Text>
           {!photoAttachments.length ? <Text style={styles.helper}>Select a troubleshooting session to see recommended safe photos.</Text> : null}
-          {photoAttachments.map((attachment) => (
-            <View key={attachment.promptId} style={styles.photoItem}>
-              <Text style={styles.sessionTitle}>{attachment.promptLabel}</Text>
-              <Text style={styles.routeHelper}>{attachment.instruction}</Text>
-              <Text style={styles.safetyText}>Safety: {attachment.safetyNote}</Text>
-              {attachment.localUri || attachment.signedUrl ? <Image source={{ uri: attachment.localUri || attachment.signedUrl }} style={styles.photoPreview} /> : null}
-              <Text style={styles.routeHelper}>Status: {attachment.status}{attachment.skippedReason ? ` — ${attachment.skippedReason}` : ''}</Text>
-              <View style={styles.photoActions}>
-                <Pressable style={styles.photoButton} onPress={() => capturePacketPhoto(attachment.promptId)}><Text style={styles.photoButtonText}>{attachment.localUri || attachment.signedUrl ? 'Retake' : 'Take photo'}</Text></Pressable>
-                <Pressable style={styles.photoButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'skipped')}><Text style={styles.photoButtonText}>Skip</Text></Pressable>
-                <Pressable style={styles.photoButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'not_applicable')}><Text style={styles.photoButtonText}>N/A</Text></Pressable>
-                <Pressable style={styles.safetyButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'blocked_by_safety')}><Text style={styles.safetyButtonText}>Unsafe access</Text></Pressable>
-              </View>
-            </View>
-          ))}
+          {photoAttachments.map((attachment) => <View key={attachment.promptId} style={styles.photoItem}><Text style={styles.sessionTitle}>{attachment.promptLabel}</Text><Text style={styles.routeHelper}>{attachment.instruction}</Text><Text style={styles.safetyText}>Safety: {attachment.safetyNote}</Text>{attachment.localUri || attachment.signedUrl ? <Image source={{ uri: attachment.localUri || attachment.signedUrl }} style={styles.photoPreview} /> : null}<Text style={styles.routeHelper}>Status: {attachment.status}{attachment.skippedReason ? ` — ${attachment.skippedReason}` : ''}</Text><View style={styles.photoActions}><Pressable style={styles.photoButton} onPress={() => capturePacketPhoto(attachment.promptId)}><Text style={styles.photoButtonText}>{attachment.localUri || attachment.signedUrl ? 'Retake' : 'Take photo'}</Text></Pressable><Pressable style={styles.photoButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'skipped')}><Text style={styles.photoButtonText}>Skip</Text></Pressable><Pressable style={styles.photoButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'not_applicable')}><Text style={styles.photoButtonText}>N/A</Text></Pressable><Pressable style={styles.safetyButton} onPress={() => setPacketPhotoStatus(attachment.promptId, 'blocked_by_safety')}><Text style={styles.safetyButtonText}>Unsafe access</Text></Pressable></View></View>)}
         </View>
         <PrimaryButton title="Review Full Report" onPress={() => navigation.navigate('ContractorReport')} />
       </View>
@@ -448,23 +400,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
           const selected = selectedKeys.includes(contractorKey(contractor));
           const decision = buildVerifiedLeadRoutingDecisions([contractor])[0];
           const route = decision.route;
-          return (
-            <Pressable key={contractorKey(contractor)} style={[styles.contractorCard, selected && styles.contractorCardSelected]} onPress={() => toggleContractor(contractor)}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.contractorName}>{contractor.businessName}</Text>
-                <Text style={styles.contractorMeta}>★ {contractor.rating ?? 'No rating'} ({contractor.reviewCount ?? 0} reviews) • {contractor.distanceMiles ?? '?'} mi</Text>
-                <Text style={styles.badges}>{contractor.verified ? 'License/listing verified' : 'Listing not verified'} • {contractor.emergencyService ? 'Emergency service' : 'Standard hours'}</Text>
-                <Text style={decision.dashboardReady ? styles.dashboardRouteText : styles.routeText}>Best route: {route.label}</Text>
-                <Text style={styles.routeHelper}>{decision.reason}</Text>
-              </View>
-              <Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected' : 'Select'}</Text>
-            </Pressable>
-          );
+          return <Pressable key={contractorKey(contractor)} style={[styles.contractorCard, selected && styles.contractorCardSelected]} onPress={() => toggleContractor(contractor)}><View style={{ flex: 1 }}><Text style={styles.contractorName}>{contractor.businessName}</Text><Text style={styles.contractorMeta}>★ {contractor.rating ?? 'No rating'} ({contractor.reviewCount ?? 0} reviews) • {contractor.distanceMiles ?? '?'} mi</Text><Text style={styles.badges}>{contractor.verified ? 'License/listing verified' : 'Listing not verified'} • {contractor.emergencyService ? 'Emergency service' : 'Standard hours'}</Text><Text style={decision.dashboardReady ? styles.dashboardRouteText : styles.routeText}>Best route: {route.label}</Text><Text style={styles.routeHelper}>{decision.reason}</Text></View><Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected' : 'Select'}</Text></Pressable>;
         })}
       </View>
 
-      <View style={styles.section}><Text style={styles.sectionTitle}>5. Preview</Text><Text style={styles.preview}>{leadPreview}</Text></View>
-
+      <View style={styles.section}><Text style={styles.sectionTitle}>5. Preview</Text><Text style={styles.preview}>{leadPreview}</Text><Text style={styles.preview}>{buildPacketScoreText(packetScore)}</Text></View>
       <PrimaryButton title={submitting ? 'Submitting...' : 'Submit Lead Request'} onPress={submitRequest} />
       <PrimaryButton title="Preview Contact Routing" onPress={previewContactRouting} />
       <Text style={styles.disclaimer}>Submitting a request does not create a final price. Contractors still need to verify access, electrical, drain, ductwork, code, and equipment conditions before giving a firm quote.</Text>
@@ -489,6 +429,11 @@ const styles = StyleSheet.create({
   sourceTitle: { color: '#14532D', fontWeight: '900', marginBottom: 5 },
   troubleshootingSourceCard: { backgroundColor: '#EFF6FF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 14 },
   troubleshootingSourceTitle: { color: '#0F2E5F', fontWeight: '900', marginBottom: 5 },
+  scoreCard: { backgroundColor: '#EEF2FF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#C7D2FE', marginBottom: 14 },
+  scoreTitle: { color: '#312E81', fontWeight: '900', fontSize: 18, marginBottom: 4 },
+  scoreBadge: { color: '#4338CA', fontWeight: '900', marginBottom: 4 },
+  goodText: { color: '#15803D', fontWeight: '800', marginTop: 6 },
+  warningText: { color: '#9A3412', fontWeight: '800', marginTop: 6, lineHeight: 18 },
   section: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#D8E2F0', marginBottom: 14 },
   sectionTitle: { fontSize: 18, fontWeight: '900', color: '#0F2E5F', marginBottom: 12 },
   label: { color: '#0F2E5F', fontWeight: '900', marginTop: 12, marginBottom: 6 },
