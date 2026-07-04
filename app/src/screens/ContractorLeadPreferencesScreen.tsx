@@ -4,18 +4,11 @@ import PrimaryButton from '../components/PrimaryButton';
 import {
   ContractorDashboardUser,
   getContractorAvailabilityWindows,
-  getContractorLeadPreferences,
+  getContractorDashboardDeliveryMethods,
   getVerifiedContractorDashboardUsers
 } from '../services/contractorDashboard';
+import { formatContractorDeliveryMethod } from '../services/contractorDeliveryMethods';
 import { VERIFIED_CONTRACTOR_PARTICIPATION_STANDARD } from '../services/contractorParticipationRules';
-
-const methodLabels: Record<string, string> = {
-  dashboard: 'HVAC Truth dashboard',
-  email: 'Email',
-  phone: 'Phone call',
-  sms: 'Text / SMS',
-  website_form: 'Website contact form'
-};
 
 export default function ContractorLeadPreferencesScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
@@ -34,7 +27,7 @@ export default function ContractorLeadPreferencesScreen({ navigation }: any) {
 
     const contractorId = access.data?.[0]?.contractor_id;
     if (contractorId) {
-      const deliveryMethodResult = await getContractorLeadPreferences(contractorId);
+      const deliveryMethodResult = await getContractorDashboardDeliveryMethods(contractorId);
       const availabilityResult = await getContractorAvailabilityWindows(contractorId);
       setDeliveryMethods(deliveryMethodResult.data || []);
       setAvailability(availabilityResult.data || []);
@@ -87,7 +80,7 @@ export default function ContractorLeadPreferencesScreen({ navigation }: any) {
         ) : (
           deliveryMethods.map((method) => (
             <View key={method.id} style={styles.row}>
-              <Text style={styles.rowTitle}>{methodLabels[method.preferred_method] || method.preferred_method}</Text>
+              <Text style={styles.rowTitle}>{formatContractorDeliveryMethod(method.delivery_method || method.preferred_method)}</Text>
               <Text style={styles.helper}>{method.destination || 'No destination stored'}</Text>
             </View>
           ))
@@ -110,7 +103,7 @@ export default function ContractorLeadPreferencesScreen({ navigation }: any) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>What this is not</Text>
-        <Text style={styles.helper}>This screen is not a lead-category picker. Active verified contractors may use operating limits, but they do not choose only replacement estimates, easy calls, high-score packets, or other preferred lead types.</Text>
+        <Text style={styles.helper}>This screen is not a request-category picker. Active verified contractors may use operating limits, but they do not choose only replacement estimates, easy calls, high-score packets, or other preferred request types.</Text>
       </View>
     </ScrollView>
   );
