@@ -62,7 +62,7 @@ export default function ContractorDashboardScreen({ navigation }: any) {
               <Text style={styles.helper}>Role: {contractor.role} • Status: {contractor.dashboard_status}</Text>
             </View>
           ))}
-          <PrimaryButton title="Lead Preferences" onPress={() => navigation.navigate('ContractorLeadPreferences')} />
+          <PrimaryButton title="Participation Settings" onPress={() => navigation.navigate('ContractorLeadPreferences')} />
         </View>
       )}
 
