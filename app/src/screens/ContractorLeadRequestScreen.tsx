@@ -19,11 +19,14 @@ import { buildPhoneScript, buildStandardizedLeadPacket, performContactRoute } fr
 import { buildVerifiedLeadRoutingDecisions, getDashboardRoutingSummary, getLeadDeliveryRoute } from '../services/verifiedLeadRouting';
 import { ContractorSearchResult } from '../services/contractorDiscovery';
 import {
+  TroubleshootingLeadDefaults,
   TroubleshootingSessionRecord,
+  buildLeadDefaultsFromTroubleshootingSession,
   buildLeadPacketPreview,
   buildTroubleshootingSnapshot,
   getRecommendedWorkflowIdForServiceType,
   getRecentTroubleshootingSessions,
+  getTroubleshootingSession,
   markTroubleshootingSessionUsed
 } from '../services/troubleshootingSessions';
 
@@ -69,9 +72,16 @@ function searchResultToSelectedContractor(contractor?: ContractorSearchResult): 
   };
 }
 
+function mergeUniqueSessions(sessions: TroubleshootingSessionRecord[], priority?: TroubleshootingSessionRecord | null) {
+  const merged = priority ? [priority, ...sessions] : sessions;
+  return merged.filter((session, index, list) => list.findIndex((item) => item.id === session.id) === index);
+}
+
 export default function ContractorLeadRequestScreen({ route, navigation }: any) {
   const { user } = useAuth();
   const routedContractor = searchResultToSelectedContractor(route?.params?.selectedContractor);
+  const routedLeadDefaults = route?.params?.leadDefaults as TroubleshootingLeadDefaults | undefined;
+  const routedTroubleshootingSessionId = route?.params?.troubleshootingSessionId ?? routedLeadDefaults?.troubleshootingSessionId ?? null;
   const initialContractors = routedContractor ? [routedContractor] : DEMO_CONTRACTORS;
 
   const [loading, setLoading] = useState(true);
@@ -80,14 +90,14 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
   const [system, setSystem] = useState<HvacSystemRecord | null>(null);
   const [reportSnapshot, setReportSnapshot] = useState<Record<string, unknown>>({});
   const [troubleshootingSessions, setTroubleshootingSessions] = useState<TroubleshootingSessionRecord[]>([]);
-  const [selectedTroubleshootingId, setSelectedTroubleshootingId] = useState<string | null>(null);
+  const [selectedTroubleshootingId, setSelectedTroubleshootingId] = useState<string | null>(routedTroubleshootingSessionId);
   const [attachTroubleshooting, setAttachTroubleshooting] = useState(true);
   const [availableContractors, setAvailableContractors] = useState<SelectedContractor[]>(initialContractors);
 
-  const [serviceType, setServiceType] = useState<LeadServiceType>('no_cooling');
-  const [urgency, setUrgency] = useState<LeadUrgency>('within_24_hours');
-  const [symptomSummary, setSymptomSummary] = useState('AC is not cooling well. Homeowner wants a ballpark estimate before scheduling.');
-  const [desiredOutcome, setDesiredOutcome] = useState('Get a contractor ballpark estimate and schedule service if the number makes sense.');
+  const [serviceType, setServiceType] = useState<LeadServiceType>(routedLeadDefaults?.serviceType ?? 'no_cooling');
+  const [urgency, setUrgency] = useState<LeadUrgency>(routedLeadDefaults?.urgency ?? 'within_24_hours');
+  const [symptomSummary, setSymptomSummary] = useState(routedLeadDefaults?.symptomSummary ?? 'AC is not cooling well. Homeowner wants a ballpark estimate before scheduling.');
+  const [desiredOutcome, setDesiredOutcome] = useState(routedLeadDefaults?.desiredOutcome ?? 'Get a contractor ballpark estimate and schedule service if the number makes sense.');
   const [preferredTimeWindow, setPreferredTimeWindow] = useState('Weekday afternoon');
   const [contactPreference, setContactPreference] = useState<ContactPreference>('phone');
   const [homeownerName, setHomeownerName] = useState('');
@@ -98,7 +108,7 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
 
   useEffect(() => {
     loadDefaults();
-  }, [user?.id]);
+  }, [user?.id, routedTroubleshootingSessionId]);
 
   useEffect(() => {
     const nextContractor = searchResultToSelectedContractor(route?.params?.selectedContractor);
@@ -106,6 +116,19 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     setAvailableContractors([nextContractor]);
     setSelectedKeys([contractorKey(nextContractor)]);
   }, [route?.params?.selectedContractor?.contractorId, route?.params?.selectedContractor?.id]);
+
+  useEffect(() => {
+    if (routedLeadDefaults) applyLeadDefaults(routedLeadDefaults);
+  }, [routedLeadDefaults?.sourceWorkflowId, routedLeadDefaults?.troubleshootingSessionId]);
+
+  function applyLeadDefaults(defaults: TroubleshootingLeadDefaults) {
+    setServiceType(defaults.serviceType);
+    setUrgency(defaults.urgency);
+    setSymptomSummary(defaults.symptomSummary);
+    setDesiredOutcome(defaults.desiredOutcome);
+    setAttachTroubleshooting(true);
+    if (defaults.troubleshootingSessionId) setSelectedTroubleshootingId(defaults.troubleshootingSessionId);
+  }
 
   async function loadDefaults() {
     if (!user?.id) return;
@@ -117,10 +140,17 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
       setReportSnapshot(defaults.reportSnapshot);
       setHomeownerEmail(defaults.profile?.email ?? user.email ?? '');
       setHomeownerName(defaults.profile?.full_name ?? '');
+
       const sessions = await getRecentTroubleshootingSessions(user.id, 8);
-      const leadEligible = sessions.find((session) => session.attach_to_lead_request);
-      setTroubleshootingSessions(sessions);
-      setSelectedTroubleshootingId(leadEligible?.id ?? sessions[0]?.id ?? null);
+      let routedSession: TroubleshootingSessionRecord | null = null;
+      if (routedTroubleshootingSessionId && !sessions.some((session) => session.id === routedTroubleshootingSessionId)) {
+        routedSession = await getTroubleshootingSession(routedTroubleshootingSessionId);
+      }
+
+      const mergedSessions = mergeUniqueSessions(sessions, routedSession);
+      const leadEligible = mergedSessions.find((session) => session.attach_to_lead_request);
+      setTroubleshootingSessions(mergedSessions);
+      setSelectedTroubleshootingId(routedTroubleshootingSessionId ?? leadEligible?.id ?? mergedSessions[0]?.id ?? null);
     } catch (error: any) {
       Alert.alert('Could not load lead request', error?.message ?? 'Please try again.');
     } finally {
@@ -177,6 +207,11 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
     selectedContractors,
     reportSnapshot: leadReportSnapshot
   }), [user?.id, system?.id, zipCode, serviceType, urgency, symptomSummary, desiredOutcome, contactPreference, preferredTimeWindow, homeownerName, homeownerPhone, homeownerEmail, attachReport, selectedContractors, leadReportSnapshot]);
+
+  function useSelectedTroubleshootingAsDefaults() {
+    if (!selectedTroubleshootingSession) return;
+    applyLeadDefaults(buildLeadDefaultsFromTroubleshootingSession(selectedTroubleshootingSession));
+  }
 
   async function submitRequest() {
     if (!user?.id) return;
@@ -275,6 +310,13 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
         </View>
       ) : null}
 
+      {routedTroubleshootingSessionId ? (
+        <View style={styles.troubleshootingSourceCard}>
+          <Text style={styles.troubleshootingSourceTitle}>Started from troubleshooting</Text>
+          <Text style={styles.routeHelper}>HVAC Truth preselected the saved troubleshooting session, attached it to this lead packet, and filled in the service type, urgency, issue summary, and desired contractor outcome.</Text>
+        </View>
+      ) : null}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>1. What do you need?</Text>
         <OptionGrid options={SERVICE_TYPE_OPTIONS} selected={serviceType} onSelect={(value) => setServiceType(value as LeadServiceType)} />
@@ -329,6 +371,7 @@ export default function ContractorLeadRequestScreen({ route, navigation }: any) 
                 <Text style={styles.routeHelper}>{session.workflow_title} • {session.severity.toUpperCase()}</Text>
                 <Text style={styles.routeHelper}>{session.result_summary ?? 'No summary saved'}</Text>
                 <Text style={selected ? styles.selectedText : styles.unselectedText}>{selected ? 'Selected for packet' : 'Tap to select'}</Text>
+                {selected ? <Pressable onPress={useSelectedTroubleshootingAsDefaults}><Text style={styles.manageLink}>Use this session to fill lead details</Text></Pressable> : null}
                 <Pressable onPress={() => navigation.navigate('TroubleshootingSessionDetail', { sessionId: session.id })}>
                   <Text style={styles.manageLink}>Manage controls</Text>
                 </Pressable>
@@ -412,6 +455,8 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, lineHeight: 23, color: '#475569', marginBottom: 16 },
   sourceCard: { backgroundColor: '#ECFDF5', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#A7F3D0', marginBottom: 14 },
   sourceTitle: { color: '#14532D', fontWeight: '900', marginBottom: 5 },
+  troubleshootingSourceCard: { backgroundColor: '#EFF6FF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 14 },
+  troubleshootingSourceTitle: { color: '#0F2E5F', fontWeight: '900', marginBottom: 5 },
   section: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#D8E2F0', marginBottom: 14 },
   sectionTitle: { fontSize: 18, fontWeight: '900', color: '#0F2E5F', marginBottom: 12 },
   label: { color: '#0F2E5F', fontWeight: '900', marginTop: 12, marginBottom: 6 },
