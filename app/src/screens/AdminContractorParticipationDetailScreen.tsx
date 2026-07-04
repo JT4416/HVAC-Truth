@@ -3,11 +3,16 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, Tex
 import PrimaryButton from '../components/PrimaryButton';
 import {
   AdminParticipationStatus,
+  ContractorDeliveryMethodMigrationReadiness,
   ContractorParticipationAdminRecord,
   buildAdminParticipationSummary,
+  buildDeliveryMethodMigrationReadiness,
+  formatDeliveryMethodMigrationReadinessStatus,
   getParticipationContractor,
   updateContractorParticipation
 } from '../services/contractorParticipationAdmin';
+import { getContractorDashboardDeliveryMethods } from '../services/contractorDashboard';
+import { ContractorDeliveryMethodReadSource, formatContractorDeliveryMethodSource } from '../services/contractorDeliveryMethods';
 
 const statusOptions: AdminParticipationStatus[] = ['active', 'inactive', 'paused', 'suspended'];
 
@@ -24,10 +29,7 @@ function parseCapacity(value: string): number | null {
 }
 
 function parseZipCodes(value: string) {
-  return value
-    .split(',')
-    .map((zip) => zip.trim())
-    .filter(Boolean);
+  return value.split(',').map((zip) => zip.trim()).filter(Boolean);
 }
 
 export default function AdminContractorParticipationDetailScreen({ route, navigation }: any) {
@@ -41,6 +43,10 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
   const [emergencyService, setEmergencyService] = useState(false);
   const [dailyLimit, setDailyLimit] = useState('');
   const [weeklyLimit, setWeeklyLimit] = useState('');
+  const [deliveryMethodSource, setDeliveryMethodSource] = useState<ContractorDeliveryMethodReadSource | null>(null);
+  const [currentDeliveryMethodCount, setCurrentDeliveryMethodCount] = useState(0);
+  const [legacyDeliveryMethodCount, setLegacyDeliveryMethodCount] = useState(0);
+  const [readiness, setReadiness] = useState<ContractorDeliveryMethodMigrationReadiness | null>(null);
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -52,9 +58,9 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
     setLoading(true);
     setErrorMessage('');
     const { data, error } = await getParticipationContractor(contractorId);
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       setErrorMessage(error.message);
       return;
     }
@@ -70,7 +76,18 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
       setEmergencyService(Boolean(data.emergency_service || data.emergencyService));
       setDailyLimit(data.max_daily_dashboard_leads == null ? '' : String(data.max_daily_dashboard_leads));
       setWeeklyLimit(data.max_weekly_dashboard_leads == null ? '' : String(data.max_weekly_dashboard_leads));
+
+      const deliveryResult = await getContractorDashboardDeliveryMethods(data.id);
+      const source = deliveryResult.source || null;
+      const currentCount = source === 'contractor_delivery_methods' ? deliveryResult.data.length : 0;
+      const legacyCount = source === 'contractor_lead_preferences' ? deliveryResult.data.length : 0;
+      setDeliveryMethodSource(source);
+      setCurrentDeliveryMethodCount(currentCount);
+      setLegacyDeliveryMethodCount(legacyCount);
+      setReadiness(buildDeliveryMethodMigrationReadiness(data, currentCount, legacyCount));
     }
+
+    setLoading(false);
   }
 
   async function saveParticipation() {
@@ -98,6 +115,7 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
     }
 
     setContractor(data);
+    if (data) setReadiness(buildDeliveryMethodMigrationReadiness(data, currentDeliveryMethodCount, legacyDeliveryMethodCount));
     setMessage('Participation controls saved.');
   }
 
@@ -146,8 +164,26 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Delivery method migration readiness</Text>
+        <Text style={styles.status}>{readiness ? formatDeliveryMethodMigrationReadinessStatus(readiness.status) : 'Not checked'}</Text>
+        <Text style={styles.helper}>Source: {formatContractorDeliveryMethodSource(deliveryMethodSource)}</Text>
+        <Text style={styles.helper}>Current delivery rows: {currentDeliveryMethodCount}</Text>
+        <Text style={styles.helper}>Legacy compatibility rows: {legacyDeliveryMethodCount}</Text>
+        {readiness?.blockers.length ? (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningTitle}>Blockers</Text>
+            {readiness.blockers.map((blocker) => <Text key={blocker} style={styles.warningText}>• {blocker}</Text>)}
+          </View>
+        ) : null}
+        <Text style={styles.label}>Checklist</Text>
+        {readiness?.checklist.map((item) => <Text key={item} style={styles.helper}>• {item}</Text>)}
+        <Text style={styles.label}>Legacy retirement criteria</Text>
+        {readiness?.legacyRetirementCriteria.map((item) => <Text key={item} style={styles.helper}>• {item}</Text>)}
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.sectionTitle}>Participation status</Text>
-        <Text style={styles.helper}>Active contractors receive all eligible HVAC Truth lead types inside their operating limits. Inactive, paused, and suspended contractors do not receive verified dashboard routing.</Text>
+        <Text style={styles.helper}>Active contractors receive eligible HVAC Truth requests inside their operating limits. Inactive, paused, and suspended contractors do not receive verified dashboard routing.</Text>
         <View style={styles.statusGrid}>
           {statusOptions.map((option) => (
             <Pressable key={option} style={[styles.statusButton, status === option && styles.statusButtonSelected]} onPress={() => setStatus(option)}>
@@ -159,13 +195,7 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Pause reason</Text>
-        <TextInput
-          style={styles.input}
-          value={pauseReason}
-          onChangeText={setPauseReason}
-          placeholder="Example: Vacation, staffing limit, temporary service pause"
-          multiline
-        />
+        <TextInput style={styles.input} value={pauseReason} onChangeText={setPauseReason} placeholder="Example: Vacation, staffing limit, temporary service pause" multiline />
       </View>
 
       <View style={styles.card}>
@@ -176,7 +206,7 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Emergency availability</Text>
-            <Text style={styles.helper}>Controls emergency visibility, not lead-category cherry-picking.</Text>
+            <Text style={styles.helper}>Controls emergency visibility, not request category selection.</Text>
           </View>
           <Switch value={emergencyService} onValueChange={setEmergencyService} />
         </View>
@@ -190,7 +220,7 @@ export default function AdminContractorParticipationDetailScreen({ route, naviga
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Locked standard</Text>
-        <Text style={styles.helper}>This editor intentionally does not include lead category preferences. Packet score, no-cooling calls, leaks, quote checks, maintenance requests, and replacement estimates remain eligible lead types for active verified contractors.</Text>
+        <Text style={styles.helper}>This editor intentionally controls participation and operating limits only. It does not add request-category selection for verified contractors.</Text>
       </View>
 
       <PrimaryButton title={saving ? 'Saving...' : 'Save Participation Controls'} onPress={saveParticipation} />
@@ -211,6 +241,9 @@ const styles = StyleSheet.create({
   status: { color: '#0F172A', fontWeight: '900', marginBottom: 4 },
   error: { color: '#B91C1C', marginBottom: 12, fontWeight: '700' },
   success: { color: '#166534', marginBottom: 12, fontWeight: '800' },
+  warningBox: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#F59E0B' },
+  warningTitle: { color: '#92400E', fontWeight: '900', marginBottom: 4 },
+  warningText: { color: '#92400E', lineHeight: 20, marginTop: 4 },
   input: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 12, padding: 12, color: '#0F172A', backgroundColor: '#FFFFFF', minHeight: 46 },
   statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   statusButton: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 14, marginRight: 8, marginBottom: 8 },
