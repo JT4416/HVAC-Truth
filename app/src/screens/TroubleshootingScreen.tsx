@@ -5,7 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import { getTroubleshootingWorkflow, troubleshootingWorkflows } from '../domain/troubleshootingWorkflows';
 import { TroubleshootingAnswers, buildTroubleshootingSessionSnapshot, runTroubleshootingWorkflow } from '../domain/troubleshootingWorkflowEngine';
 import { getPrimarySystem } from '../services/profilePersistence';
-import { TroubleshootingSessionRecord, getRecentTroubleshootingSessions, saveTroubleshootingSession } from '../services/troubleshootingSessions';
+import {
+  TroubleshootingSessionRecord,
+  buildLeadDefaultsFromTroubleshootingSession,
+  getRecentTroubleshootingSessions,
+  saveTroubleshootingSession
+} from '../services/troubleshootingSessions';
 
 export default function TroubleshootingScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -14,6 +19,7 @@ export default function TroubleshootingScreen({ navigation }: any) {
   const [result, setResult] = useState<ReturnType<typeof runTroubleshootingWorkflow> | null>(null);
   const [hvacSystemId, setHvacSystemId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
+  const [convertingToLead, setConvertingToLead] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [recentSessions, setRecentSessions] = useState<TroubleshootingSessionRecord[]>([]);
 
@@ -55,8 +61,8 @@ export default function TroubleshootingScreen({ navigation }: any) {
     setResult(runTroubleshootingWorkflow(workflow, answers));
   }
 
-  async function saveSession() {
-    if (!user?.id || !result) return;
+  async function saveSession(showAlert = true) {
+    if (!user?.id || !result) return null;
     try {
       setSaving(true);
       const saved = await saveTroubleshootingSession({
@@ -69,11 +75,28 @@ export default function TroubleshootingScreen({ navigation }: any) {
         attachToLeadRequest: true
       });
       setRecentSessions((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 8));
-      Alert.alert('Troubleshooting saved', 'This workflow result can now be attached to contractor reports and lead requests.');
+      if (showAlert) Alert.alert('Troubleshooting saved', 'This workflow result can now be attached to contractor reports and lead requests.');
+      return saved;
     } catch (error: any) {
       Alert.alert('Could not save troubleshooting', error?.message ?? 'Please try again.');
+      return null;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function requestHelpFromTroubleshooting() {
+    if (!result) return;
+    try {
+      setConvertingToLead(true);
+      const saved = await saveSession(false);
+      if (!saved) return;
+      navigation.navigate('ContractorLeadRequest', {
+        troubleshootingSessionId: saved.id,
+        leadDefaults: buildLeadDefaultsFromTroubleshootingSession(saved)
+      });
+    } finally {
+      setConvertingToLead(false);
     }
   }
 
@@ -163,7 +186,12 @@ export default function TroubleshootingScreen({ navigation }: any) {
           {result.contractorReportNotes.map((item) => <Text key={item} style={styles.bullet}>• {item}</Text>)}
 
           {snapshot ? <Text style={styles.snapshotNote}>Session snapshot is ready for report and lead packet attachment.</Text> : null}
-          <PrimaryButton title={saving ? 'Saving...' : 'Save Troubleshooting Session'} onPress={saveSession} />
+          <PrimaryButton title={saving ? 'Saving...' : 'Save Troubleshooting Session'} onPress={() => saveSession(true)} />
+          <View style={styles.leadConversionCard}>
+            <Text style={styles.leadConversionTitle}>Need a technician now?</Text>
+            <Text style={styles.leadConversionBody}>HVAC Truth can turn this completed workflow into a contractor lead packet with the session attached and the issue summary prefilled.</Text>
+            <PrimaryButton title={convertingToLead ? 'Preparing Lead...' : 'I Tried This, Now Request Help'} onPress={requestHelpFromTroubleshooting} />
+          </View>
         </View>
       ) : null}
     </ScrollView>
@@ -213,5 +241,8 @@ const styles = StyleSheet.create({
   bullet: { fontSize: 15, lineHeight: 22, color: '#334155' },
   noBullet: { fontSize: 15, lineHeight: 22, color: '#991B1B', fontWeight: '700' },
   script: { fontSize: 15, lineHeight: 22, fontStyle: 'italic', color: '#334155', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12 },
-  snapshotNote: { marginTop: 12, marginBottom: 8, color: '#0F766E', fontWeight: '800' }
+  snapshotNote: { marginTop: 12, marginBottom: 8, color: '#0F766E', fontWeight: '800' },
+  leadConversionCard: { backgroundColor: '#ECFDF5', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BBF7D0', marginTop: 12 },
+  leadConversionTitle: { color: '#14532D', fontWeight: '900', marginBottom: 5 },
+  leadConversionBody: { color: '#334155', lineHeight: 20, marginBottom: 10 }
 });
