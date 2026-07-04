@@ -17,7 +17,8 @@ HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote che
 cd app
 npm install
 cp .env.example .env
-npx expo start
+npm run typecheck
+npm start
 ```
 
 Fill in Supabase and API values in `app/.env`.
@@ -28,9 +29,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V27 — Delivery Method Cleanup**.
+Current stage: **V28 — Local Validation and Supabase Migration Hardening**.
 
-The app now separates contractor contact/delivery methods from anything that sounds like lead-category preference. Verified contractors are active or inactive in the network, may define operating limits, and may configure contact routes. They may not cherry-pick only preferred request categories or packet scores.
+V28 adds repeatable local TypeScript validation setup and documents the Supabase migration compatibility review needed before production database application. The repository now includes `app/tsconfig.json` and an `npm run typecheck` script.
 
 ## Core Marketplace Rule
 
@@ -321,33 +322,11 @@ backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
 
 ### V27 — Delivery Method Cleanup
 
-New V27 files:
-
-```text
-app/src/services/contractorDeliveryMethods.ts
-backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql
-docs/features/DELIVERY_METHOD_CLEANUP.md
-docs/build/NEXT_BUILD_STEPS_V27.md
-```
-
-Updated V27 files:
-
-```text
-app/src/services/contractorDashboard.ts
-app/src/services/contractorClaimReview.ts
-app/src/screens/ContractorProfileClaimScreen.tsx
-app/src/screens/ContractorLeadPreferencesScreen.tsx
-app/src/screens/AdminContractorClaimDetailScreen.tsx
-README.md
-```
-
-V27 behavior:
-
-- Adds a delivery-method service with fallback to the legacy `contractor_lead_preferences` table.
-- Adds a forward migration for `contractor_delivery_methods` and backfills records from legacy delivery rows.
-- Updates contractor claim, claim review, and participation settings copy to say delivery methods instead of lead preferences.
-- Keeps dashboard, email, phone, SMS, and website contact form routing options.
-- Preserves the all-or-nothing verified contractor participation standard.
+- Added `app/src/services/contractorDeliveryMethods.ts`
+- Added `backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql`
+- Added docs for delivery method cleanup
+- Updated contractor claim, claim review, and participation settings copy to say delivery methods instead of lead preferences
+- Preserved legacy compatibility paths
 
 Run after V25:
 
@@ -355,17 +334,39 @@ Run after V25:
 backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql
 ```
 
+### V28 — Local Validation and Supabase Migration Hardening
+
+New V28 files:
+
+```text
+app/tsconfig.json
+docs/build/V28_VALIDATION_AND_MIGRATION_HARDENING.md
+```
+
+Updated V28 files:
+
+```text
+app/package.json
+README.md
+```
+
+V28 behavior:
+
+- Adds a repeatable `npm run typecheck` command.
+- Adds a strict Expo-compatible TypeScript configuration.
+- Documents Supabase migration compatibility checks for V25 and V27.
+- Identifies that local TypeScript, Expo, and Supabase CLI validation still need to be run outside the GitHub connector environment.
+
 ## Next Recommended Build
 
-**V28 — Local Validation and Supabase Migration Hardening**
+**V29 — Claim Review RPC Delivery Method Write-Through**
 
 Recommended next work:
 
-- Run local TypeScript validation.
-- Run Expo startup validation.
-- Review V25 policy syntax for Supabase/Postgres compatibility.
-- Apply migrations in a clean Supabase branch or staging project.
-- Replace any unsupported `create policy if not exists` statements with explicit `drop policy if exists` plus `create policy` blocks.
+- Update claim approval database flow so approved claims write directly to `contractor_delivery_methods`.
+- Preserve legacy compatibility fields during the transition period.
+- Run local `npm run typecheck` and Expo validation.
+- Run migrations in a clean Supabase branch or staging project.
 
 ## Active Repository
 
