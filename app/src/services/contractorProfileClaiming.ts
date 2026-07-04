@@ -8,6 +8,7 @@ export type ContractorClaimStatus =
   | 'rejected';
 
 export type LeadPreference = 'dashboard' | 'email' | 'phone' | 'sms' | 'website_form';
+export type DeliveryMethod = LeadPreference;
 
 export type ContractorProfileClaimInput = {
   contractorId?: string | null;
@@ -50,7 +51,7 @@ export function validateContractorClaim(input: ContractorProfileClaimInput): str
   if (!input.contactName.trim()) errors.push('Contact name is required.');
   if (!input.contactEmail.trim()) errors.push('Contact email is required.');
   if (normalizeZipList(input.serviceZipCodes).length === 0) errors.push('At least one service ZIP code is required.');
-  if (input.leadPreferences.length === 0) errors.push('Choose at least one lead delivery preference.');
+  if (input.leadPreferences.length === 0) errors.push('Choose at least one delivery method.');
 
   return errors;
 }
@@ -131,6 +132,6 @@ export function buildContractorVerificationChecklist(input: ContractorProfileCla
     input.website ? 'Website provided' : 'Website missing',
     input.contactEmail ? 'Contact email provided' : 'Contact email missing',
     normalizeZipList(input.serviceZipCodes).length > 0 ? 'Service area provided' : 'Service area missing',
-    input.leadPreferences.length > 0 ? 'Lead preferences selected' : 'Lead preferences missing'
+    input.leadPreferences.length > 0 ? 'Delivery methods selected' : 'Delivery methods missing'
   ];
 }
