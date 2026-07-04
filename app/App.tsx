@@ -14,6 +14,9 @@ import AuthScreen from './src/screens/AuthScreen';
 import ContractorReportScreen from './src/screens/ContractorReportScreen';
 import ContractorLeadRequestScreen from './src/screens/ContractorLeadRequestScreen';
 import ContractorProfileClaimScreen from './src/screens/ContractorProfileClaimScreen';
+import ContractorDashboardScreen from './src/screens/ContractorDashboardScreen';
+import ContractorLeadDetailScreen from './src/screens/ContractorLeadDetailScreen';
+import ContractorLeadPreferencesScreen from './src/screens/ContractorLeadPreferencesScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 
 export type RootStackParamList = {
@@ -28,6 +31,9 @@ export type RootStackParamList = {
   ContractorReport: undefined;
   ContractorLeadRequest: undefined;
   ContractorProfileClaim: undefined;
+  ContractorDashboard: undefined;
+  ContractorLeadDetail: { leadId: string };
+  ContractorLeadPreferences: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -57,6 +63,9 @@ function AppNavigator() {
         <Stack.Screen name="ContractorReport" component={ContractorReportScreen} options={{ title: 'Contractor Report' }} />
         <Stack.Screen name="ContractorLeadRequest" component={ContractorLeadRequestScreen} options={{ title: 'Request Contractor Help' }} />
         <Stack.Screen name="ContractorProfileClaim" component={ContractorProfileClaimScreen} options={{ title: 'Claim Contractor Profile' }} />
+        <Stack.Screen name="ContractorDashboard" component={ContractorDashboardScreen} options={{ title: 'Contractor Dashboard' }} />
+        <Stack.Screen name="ContractorLeadDetail" component={ContractorLeadDetailScreen} options={{ title: 'Lead Packet' }} />
+        <Stack.Screen name="ContractorLeadPreferences" component={ContractorLeadPreferencesScreen} options={{ title: 'Lead Preferences' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
