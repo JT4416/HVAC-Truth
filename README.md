@@ -387,6 +387,37 @@ insert into public.app_admin_users (user_id, role, active)
 values ('<profile_uuid>', 'owner', true);
 ```
 
+## V14 Update - Verified Dashboard Lead Routing
+
+V14 connects homeowner lead requests to verified contractor dashboard delivery.
+
+New V14 files:
+
+```text
+app/src/services/verifiedLeadRouting.ts
+backend/supabase/migrations/20260703_v14_verified_dashboard_lead_routing.sql
+docs/features/VERIFIED_DASHBOARD_LEAD_ROUTING.md
+docs/build/NEXT_BUILD_STEPS_V14.md
+```
+
+Updated V14 files:
+
+```text
+app/src/services/contractorLeadFlow.ts
+app/src/screens/ContractorLeadRequestScreen.tsx
+README.md
+```
+
+Direct dashboard delivery now requires HVAC Truth verification, dashboard lead acceptance, and a real contractor profile ID. If any of those are missing, the contractor stays on public-contact routing.
+
+The homeowner lead request screen now shows a verified routing preview and writes dashboard-ready lead recipients only for eligible contractors.
+
+Run the V14 migration in Supabase:
+
+```text
+backend/supabase/migrations/20260703_v14_verified_dashboard_lead_routing.sql
+```
+
 ## GitHub Recommendation
 
 The active repository for this build is:
