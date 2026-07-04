@@ -1,16 +1,45 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, Switch, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, View, Text, Switch, StyleSheet, ScrollView, Pressable } from 'react-native';
 import PrimaryButton from '../components/PrimaryButton';
+import { useAuth } from '../context/AuthContext';
 import { getTroubleshootingWorkflow, troubleshootingWorkflows } from '../domain/troubleshootingWorkflows';
 import { TroubleshootingAnswers, buildTroubleshootingSessionSnapshot, runTroubleshootingWorkflow } from '../domain/troubleshootingWorkflowEngine';
+import { getPrimarySystem } from '../services/profilePersistence';
+import { TroubleshootingSessionRecord, getRecentTroubleshootingSessions, saveTroubleshootingSession } from '../services/troubleshootingSessions';
 
 export default function TroubleshootingScreen() {
+  const { user } = useAuth();
   const [workflowId, setWorkflowId] = useState('both-indoor-outdoor-off-drain-float');
   const [answers, setAnswers] = useState<TroubleshootingAnswers>({});
   const [result, setResult] = useState<ReturnType<typeof runTroubleshootingWorkflow> | null>(null);
+  const [hvacSystemId, setHvacSystemId] = useState<string | undefined>();
+  const [saving, setSaving] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [recentSessions, setRecentSessions] = useState<TroubleshootingSessionRecord[]>([]);
 
   const workflow = useMemo(() => getTroubleshootingWorkflow(workflowId), [workflowId]);
   const snapshot = useMemo(() => result ? buildTroubleshootingSessionSnapshot({ workflow, answers, result }) : null, [workflow, answers, result]);
+
+  useEffect(() => {
+    loadTroubleshootingContext();
+  }, [user?.id]);
+
+  async function loadTroubleshootingContext() {
+    if (!user?.id) return;
+    try {
+      setLoadingSessions(true);
+      const [system, sessions] = await Promise.all([
+        getPrimarySystem(user.id),
+        getRecentTroubleshootingSessions(user.id, 5)
+      ]);
+      setHvacSystemId(system?.id);
+      setRecentSessions(sessions);
+    } catch (error: any) {
+      Alert.alert('Could not load troubleshooting history', error?.message ?? 'Please try again.');
+    } finally {
+      setLoadingSessions(false);
+    }
+  }
 
   function selectWorkflow(id: string) {
     setWorkflowId(id);
@@ -26,10 +55,44 @@ export default function TroubleshootingScreen() {
     setResult(runTroubleshootingWorkflow(workflow, answers));
   }
 
+  async function saveSession() {
+    if (!user?.id || !result) return;
+    try {
+      setSaving(true);
+      const saved = await saveTroubleshootingSession({
+        userId: user.id,
+        hvacSystemId,
+        workflow,
+        answers,
+        result,
+        attachToContractorReport: true,
+        attachToLeadRequest: true
+      });
+      setRecentSessions((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 5));
+      Alert.alert('Troubleshooting saved', 'This workflow result can now be attached to contractor reports and lead requests.');
+    } catch (error: any) {
+      Alert.alert('Could not save troubleshooting', error?.message ?? 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Safe AC Troubleshooting</Text>
       <Text style={styles.subtitle}>Choose the closest symptom. HVAC Truth will only show homeowner-safe checks and will stop at pro-only work.</Text>
+
+      <View style={styles.historyCard}>
+        <Text style={styles.historyTitle}>Recent saved sessions</Text>
+        {loadingSessions ? <ActivityIndicator color="#0B66E4" /> : null}
+        {!loadingSessions && !recentSessions.length ? <Text style={styles.helper}>No saved troubleshooting sessions yet.</Text> : null}
+        {recentSessions.map((session) => (
+          <View key={session.id} style={styles.historyItem}>
+            <Text style={styles.historyWorkflow}>{session.workflow_title}</Text>
+            <Text style={styles.historyMeta}>{session.severity.toUpperCase()} • {session.result_summary ?? 'No summary'}</Text>
+          </View>
+        ))}
+      </View>
 
       <View style={styles.workflowGrid}>
         {troubleshootingWorkflows.map((item) => (
@@ -94,7 +157,8 @@ export default function TroubleshootingScreen() {
           <Text style={styles.sectionTitle}>Contractor report notes</Text>
           {result.contractorReportNotes.map((item) => <Text key={item} style={styles.bullet}>• {item}</Text>)}
 
-          {snapshot ? <Text style={styles.snapshotNote}>Session snapshot is ready for future report/lead packet attachment.</Text> : null}
+          {snapshot ? <Text style={styles.snapshotNote}>Session snapshot is ready for report and lead packet attachment.</Text> : null}
+          <PrimaryButton title={saving ? 'Saving...' : 'Save Troubleshooting Session'} onPress={saveSession} />
         </View>
       ) : null}
     </ScrollView>
@@ -105,6 +169,11 @@ const styles = StyleSheet.create({
   container: { padding: 24, backgroundColor: '#F8FAFC' },
   title: { fontSize: 28, fontWeight: '900', marginBottom: 8, color: '#0F172A' },
   subtitle: { fontSize: 15, lineHeight: 22, color: '#475569', marginBottom: 14 },
+  historyCard: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#D8E2F0', padding: 14, marginBottom: 14 },
+  historyTitle: { color: '#0F172A', fontWeight: '900', marginBottom: 8 },
+  historyItem: { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 8, marginTop: 8 },
+  historyWorkflow: { color: '#0F172A', fontWeight: '900', marginBottom: 3 },
+  historyMeta: { color: '#64748B', lineHeight: 18, fontSize: 12 },
   workflowGrid: { gap: 10, marginBottom: 14 },
   workflowCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, padding: 14 },
   workflowCardSelected: { backgroundColor: '#0B66E4', borderColor: '#0B66E4' },
@@ -136,5 +205,5 @@ const styles = StyleSheet.create({
   bullet: { fontSize: 15, lineHeight: 22, color: '#334155' },
   noBullet: { fontSize: 15, lineHeight: 22, color: '#991B1B', fontWeight: '700' },
   script: { fontSize: 15, lineHeight: 22, fontStyle: 'italic', color: '#334155', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12 },
-  snapshotNote: { marginTop: 12, color: '#0F766E', fontWeight: '800' }
+  snapshotNote: { marginTop: 12, marginBottom: 8, color: '#0F766E', fontWeight: '800' }
 });
