@@ -27,9 +27,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V18 — Troubleshooting Session Persistence**.
+Current stage: **V19 — Troubleshooting Session Controls**.
 
-The app now saves completed homeowner-safe troubleshooting workflows and attaches the latest saved troubleshooting context to contractor reports, homeowner lead requests, and contractor dashboard lead packets.
+The app now lets homeowners manage saved troubleshooting sessions, choose whether they appear in contractor reports or lead packets, archive old sessions, preview contractor-facing troubleshooting context, and select a specific saved troubleshooting session during lead request submission.
 
 ## Build History
 
@@ -206,45 +206,57 @@ backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
 
 ### V18 — Troubleshooting Session Persistence
 
-V18 saves completed troubleshooting workflows and attaches them to contractor handoffs.
+- Saves completed troubleshooting sessions to Supabase
+- Shows recent troubleshooting sessions on the troubleshooting screen
+- Adds the latest saved troubleshooting session to the contractor-ready report
+- Adds the latest saved troubleshooting snapshot to lead request report snapshots
+- Shows attached troubleshooting context in the contractor dashboard lead packet
 
-New V18 files:
+### V19 — Troubleshooting Session Controls
+
+V19 gives homeowners control over saved troubleshooting sessions and contractor visibility.
+
+New V19 files:
 
 ```text
-app/src/services/troubleshootingSessions.ts
-docs/features/TROUBLESHOOTING_SESSION_PERSISTENCE.md
-docs/build/NEXT_BUILD_STEPS_V18.md
+app/src/screens/TroubleshootingSessionDetailScreen.tsx
+backend/supabase/migrations/20260703_v19_troubleshooting_session_controls.sql
+docs/features/TROUBLESHOOTING_SESSION_CONTROLS.md
+docs/build/NEXT_BUILD_STEPS_V19.md
 ```
 
-Updated V18 files:
+Updated V19 files:
 
 ```text
+app/App.tsx
 app/src/screens/TroubleshootingScreen.tsx
-app/src/screens/ContractorReportScreen.tsx
 app/src/screens/ContractorLeadRequestScreen.tsx
-app/src/screens/ContractorLeadDetailScreen.tsx
+app/src/services/troubleshootingSessions.ts
 README.md
 ```
 
-V18 behavior:
+V19 behavior:
 
-- Saves completed troubleshooting sessions to Supabase.
-- Shows recent troubleshooting sessions on the troubleshooting screen.
-- Adds the latest saved troubleshooting session to the contractor-ready report.
-- Adds the latest saved troubleshooting snapshot to lead request report snapshots.
-- Shows attached troubleshooting context in the contractor dashboard lead packet.
+- Opens saved troubleshooting sessions from history.
+- Lets homeowners label sessions.
+- Lets homeowners attach or hide sessions from contractor reports.
+- Lets homeowners attach or hide sessions from lead packets.
+- Lets homeowners archive sessions so they are hidden from active handoff flows.
+- Lets homeowners choose the exact session to attach during lead request submission.
+- Shows a troubleshooting packet preview before submission.
+- Recommends a troubleshooting workflow based on service type.
 
-V18 uses the V17 migration:
+Run after V17 migration:
 
 ```text
-backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
+backend/supabase/migrations/20260703_v19_troubleshooting_session_controls.sql
 ```
 
 ## Next Recommended Build
 
-**V19 — Troubleshooting Session Controls**
+**V20 — Troubleshooting to Lead Conversion**
 
-Let homeowners choose which troubleshooting session to attach, hide sessions from contractor handoffs, and preview exactly what the contractor will receive.
+Allow a completed troubleshooting workflow to start a contractor lead request directly, pre-fill service type and symptom summary, and preselect the saved troubleshooting session.
 
 ## Active Repository
 
