@@ -1,6 +1,6 @@
 # HVAC Truth MVP Starter
 
-HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, and verified contractor dashboard delivery.
+HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, and contractor-ready photo packet handoffs.
 
 ## MVP Stack
 
@@ -8,6 +8,7 @@ HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote che
 - Backend/Auth/DB: Supabase
 - AI: OpenAI API through backend or Supabase Edge Functions
 - Contractor discovery: Supabase Edge Function with Google Places/Yelp provider support
+- Storage: Supabase Storage for homeowner system photos and contractor packet photos
 - Payments: Stripe later, after beta validation
 
 ## Local Setup
@@ -27,9 +28,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V21 — Contractor Packet Intelligence**.
+Current stage: **V22 — Photo Capture for Contractor Packets**.
 
-The app now turns saved troubleshooting sessions into richer contractor-facing packets. Contractor packets include workflow-specific verification focus, severity explanations, homeowner safety boundaries, safe photo prompts, and safe checklist status while keeping homeowner instructions inside existing safety limits.
+The app now turns V21 safe photo prompts into actual homeowner controls. Homeowners can take/retake a photo, skip a prompt, mark it not applicable, or mark it unsafe to access. Attached photos and photo status are included in the contractor packet while keeping all homeowner guidance inside safe visual-observation boundaries.
 
 ## Build History
 
@@ -321,11 +322,51 @@ V21 behavior:
 
 No new migration is required for V21.
 
+### V22 — Photo Capture for Contractor Packets
+
+V22 turns V21 safe photo prompts into homeowner upload/status controls.
+
+New V22 files:
+
+```text
+app/src/services/contractorPacketPhotos.ts
+backend/supabase/migrations/20260704_v22_contractor_packet_photo_storage.sql
+docs/features/CONTRACTOR_PACKET_PHOTO_ATTACHMENTS.md
+docs/build/NEXT_BUILD_STEPS_V22.md
+```
+
+Updated V22 files:
+
+```text
+app/src/screens/ContractorLeadRequestScreen.tsx
+app/src/screens/ContractorLeadDetailScreen.tsx
+app/src/services/contractorLeadFlow.ts
+app/src/services/contractorContactRouting.ts
+README.md
+```
+
+V22 behavior:
+
+- Shows safe photo prompts in the contractor lead request flow.
+- Lets homeowners take/retake photos from safe visible areas only.
+- Lets homeowners skip, mark not applicable, or mark unsafe access.
+- Uploads attached packet photos to private Supabase Storage.
+- Stores photo metadata and status in `reportSnapshot.troubleshooting.contractorPacket.photoAttachments`.
+- Stores summary counts in `reportSnapshot.troubleshooting.contractorPacket.photoAttachmentSummary`.
+- Shows photo previews/status in contractor dashboard lead detail.
+- Adds photo status to saved lead summaries and standardized contact packets.
+
+Run:
+
+```text
+backend/supabase/migrations/20260704_v22_contractor_packet_photo_storage.sql
+```
+
 ## Next Recommended Build
 
-**V22 — Photo Capture for Contractor Packets**
+**V23 — Contractor Packet Review and Scoring**
 
-Turn V21 safe photo prompts into actual homeowner upload controls, attach photos to lead packets, and show upload/skip/not-applicable status in the contractor dashboard.
+Add packet completeness scoring before submission and show a contractor dashboard badge for packet quality, missing high-value fields, and unsafe-access photo gaps.
 
 ## Active Repository
 
