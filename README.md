@@ -27,9 +27,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V16 — Search Result to Lead Request**.
+Current stage: **V17 — Troubleshooting Workflow Engine**.
 
-The app can now search contractors, persist provider results to real contractor records, select a specific contractor from the finder, and carry that contractor into the homeowner lead request flow with ID, verification, dashboard lead, and contact-route data preserved.
+The app now has a homeowner-safe troubleshooting workflow engine with symptom-specific workflows, including the priority “indoor and outdoor units both off” workflow for float switch, condensate drain, horizontal installation, emergency pan, pan switch, and shop-vac drain/pan cleanup checks.
 
 ## Build History
 
@@ -186,38 +186,73 @@ supabase functions deploy contractor-discovery
 
 ### V16 — Search Result to Lead Request
 
-V16 connects contractor finder selections into the homeowner lead request flow.
+- `Request Help` on a search result navigates to `ContractorLeadRequest`
+- Selected contractor is passed through navigation state
+- Lead request screen replaces the demo list with the selected contractor
+- Contractor ID, verification state, dashboard lead flags, contact route data, and provider source data are preserved
 
-New V16 files:
+### V17 — Troubleshooting Workflow Engine
+
+V17 replaces the simple troubleshooting evaluator with a homeowner-safe workflow engine.
+
+New V17 files:
 
 ```text
-docs/features/SEARCH_RESULT_TO_LEAD_REQUEST.md
-docs/build/NEXT_BUILD_STEPS_V16.md
+app/src/domain/troubleshootingWorkflowEngine.ts
+app/src/domain/troubleshootingWorkflows.ts
+backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
+docs/features/TROUBLESHOOTING_WORKFLOW_ENGINE.md
+docs/build/NEXT_BUILD_STEPS_V17.md
 ```
 
-Updated V16 files:
+Updated V17 files:
 
 ```text
-app/App.tsx
-app/src/screens/ContractorFinderScreen.tsx
-app/src/screens/ContractorLeadRequestScreen.tsx
+app/src/screens/TroubleshootingScreen.tsx
 README.md
 ```
 
-V16 behavior:
+V17 workflows:
 
-- `Request Help` on a search result navigates to `ContractorLeadRequest`.
-- The selected contractor is passed through navigation state.
-- The lead request screen replaces the demo list with the selected contractor.
-- The selected contractor is preselected.
-- Contractor ID, verification state, dashboard lead flags, contact route data, and provider source data are preserved.
-- If no contractor is passed, the MVP demo list still works as a fallback.
+```text
+Indoor and Outdoor Units Both Off
+No Cooling / Warm Air
+Water Leak / Drain or Pan Issue
+Frozen Coil / Ice Visible
+Weak Airflow
+Odor / Smell Safety Check
+Noise / Vibration
+Quote / Repair Recommendation Check
+```
+
+Priority workflow included:
+
+```text
+Both indoor and outdoor units off:
+1. Check the float switch visually.
+2. Vacuum out the condensate drain line.
+3. If horizontal installation:
+   - Check the emergency pan and/or pan switch.
+   - Clean the drain line and pan with a shop vac.
+```
+
+Safety rule:
+
+```text
+No bypassing safeties. No electrical compartment access. No refrigerant work. No gas or combustion work.
+```
+
+Run:
+
+```text
+backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
+```
 
 ## Next Recommended Build
 
-**V17 — Troubleshooting Workflow Engine**
+**V18 — Troubleshooting Session Persistence**
 
-Build deeper symptom-specific homeowner troubleshooting flows and attach the results to contractor reports and lead packets.
+Save completed troubleshooting sessions and attach them to contractor reports, lead requests, and dashboard lead packets.
 
 ## Active Repository
 
