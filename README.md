@@ -1,6 +1,6 @@
 # HVAC Truth MVP Starter
 
-HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, contractor-ready photo packet handoffs, and packet completeness scoring.
+HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, contractor-ready photo packet handoffs, packet completeness scoring, and verified contractor participation rules.
 
 ## MVP Stack
 
@@ -28,9 +28,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V23 — Contractor Packet Review and Scoring**.
+Current stage: **V24 — Verified Contractor Participation Rules**.
 
-The app now scores contractor packet completeness before submission and shows the score in contractor dashboard lead detail. The score highlights missing high-value fields like contact path, air handler location, access notes, model/serial data, troubleshooting context, safe photo status, selected contractor, and safety-boundary visibility.
+The app now treats verified contractor dashboard delivery as active network participation plus operating limits. Verified contractors are active or inactive in the HVAC Truth network. Packet score remains informational and does not become a lead-category selection switch.
 
 ## Build History
 
@@ -397,11 +397,46 @@ V23 behavior:
 
 No new migration is required for V23.
 
+### V24 — Verified Contractor Participation Rules
+
+V24 defines verified contractor routing as active network participation plus operating limits.
+
+New V24 files:
+
+```text
+app/src/services/contractorParticipationRules.ts
+backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
+docs/features/VERIFIED_CONTRACTOR_PARTICIPATION_RULES.md
+docs/build/NEXT_BUILD_STEPS_V24.md
+```
+
+Updated V24 files:
+
+```text
+app/src/services/verifiedLeadRouting.ts
+app/src/services/contractorLeadFlow.ts
+README.md
+```
+
+V24 behavior:
+
+- Adds a verified contractor participation rules service.
+- Uses active participation plus operating limits for verified dashboard routing.
+- Allows service area, emergency availability, pause status, and capacity limits.
+- Keeps packet score informational.
+- Adds contractor participation fields to Supabase.
+
+Run:
+
+```text
+backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
+```
+
 ## Next Recommended Build
 
-**V24 — Contractor Preference Rules**
+**V25 — Participation Admin Controls**
 
-Let verified contractors define required packet fields by lead type, then use those preferences during routing and before homeowner submission.
+Build owner/admin and contractor-facing controls for participation status, service area, emergency availability, pause/resume, and capacity limits.
 
 ## Active Repository
 
