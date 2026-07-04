@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import PrimaryButton from '../components/PrimaryButton';
 import {
   ContractorDashboardLead,
@@ -18,21 +18,17 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
   const [notes, setNotes] = useState<ContractorNote[]>([]);
   const [noteBody, setNoteBody] = useState('');
 
-  useEffect(() => {
-    loadLead();
-  }, [leadId]);
+  useEffect(() => { loadLead(); }, [leadId]);
 
   async function loadLead() {
     setLoading(true);
     const { data, notes: leadNotes, error } = await getContractorDashboardLead(leadId);
     setLoading(false);
-
     if (error) {
       Alert.alert('Lead unavailable', error.message);
       navigation.goBack();
       return;
     }
-
     setLead(data);
     setNotes(leadNotes || []);
   }
@@ -65,6 +61,8 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
   const report = lead.reportSnapshot || {};
   const troubleshooting = (report as any).troubleshooting;
   const packet = troubleshooting?.contractorPacket;
+  const photoAttachments = (packet?.photoAttachments ?? []) as any[];
+  const photoSummary = packet?.photoAttachmentSummary;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -73,16 +71,11 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Homeowner request</Text>
-        <Text style={styles.label}>ZIP code</Text>
-        <Text style={styles.value}>{lead.zipCode || 'Not provided'}</Text>
-        <Text style={styles.label}>Preferred contact</Text>
-        <Text style={styles.value}>{lead.contactPreference || 'Not provided'}</Text>
-        <Text style={styles.label}>Preferred time window</Text>
-        <Text style={styles.value}>{lead.preferredTimeWindow || 'Not provided'}</Text>
-        <Text style={styles.label}>Issue summary</Text>
-        <Text style={styles.value}>{lead.symptomSummary || 'Not provided'}</Text>
-        <Text style={styles.label}>Desired outcome</Text>
-        <Text style={styles.value}>{lead.desiredOutcome || 'Not provided'}</Text>
+        <Text style={styles.label}>ZIP code</Text><Text style={styles.value}>{lead.zipCode || 'Not provided'}</Text>
+        <Text style={styles.label}>Preferred contact</Text><Text style={styles.value}>{lead.contactPreference || 'Not provided'}</Text>
+        <Text style={styles.label}>Preferred time window</Text><Text style={styles.value}>{lead.preferredTimeWindow || 'Not provided'}</Text>
+        <Text style={styles.label}>Issue summary</Text><Text style={styles.value}>{lead.symptomSummary || 'Not provided'}</Text>
+        <Text style={styles.label}>Desired outcome</Text><Text style={styles.value}>{lead.desiredOutcome || 'Not provided'}</Text>
       </View>
 
       <View style={styles.card}>
@@ -109,48 +102,45 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Troubleshooting completed by homeowner</Text>
-        {troubleshooting ? (
-          <>
-            <Text style={styles.label}>Workflow</Text>
-            <Text style={styles.value}>{String(troubleshooting.workflowTitle || 'Not provided')}</Text>
-            <Text style={styles.label}>Severity</Text>
-            <Text style={styles.value}>{String(troubleshooting.severity || 'Not provided')}</Text>
-            <Text style={styles.label}>Summary</Text>
-            <Text style={styles.value}>{String(troubleshooting.summary || 'Not provided')}</Text>
-            <Text style={styles.label}>Homeowner script</Text>
-            <Text style={styles.value}>{String(troubleshooting.homeownerScript || 'Not provided')}</Text>
-            <Text style={styles.label}>Contractor notes</Text>
-            {Array.isArray(troubleshooting.contractorReportNotes) && troubleshooting.contractorReportNotes.length
-              ? troubleshooting.contractorReportNotes.map((note: string) => <Text key={note} style={styles.value}>• {note}</Text>)
-              : <Text style={styles.value}>No notes provided</Text>}
-          </>
-        ) : <Text style={styles.helper}>No troubleshooting session attached to this lead.</Text>}
+        {troubleshooting ? <>
+          <Text style={styles.label}>Workflow</Text><Text style={styles.value}>{String(troubleshooting.workflowTitle || 'Not provided')}</Text>
+          <Text style={styles.label}>Severity</Text><Text style={styles.value}>{String(troubleshooting.severity || 'Not provided')}</Text>
+          <Text style={styles.label}>Summary</Text><Text style={styles.value}>{String(troubleshooting.summary || 'Not provided')}</Text>
+          <Text style={styles.label}>Homeowner script</Text><Text style={styles.value}>{String(troubleshooting.homeownerScript || 'Not provided')}</Text>
+          <Text style={styles.label}>Contractor notes</Text>
+          {Array.isArray(troubleshooting.contractorReportNotes) && troubleshooting.contractorReportNotes.length ? troubleshooting.contractorReportNotes.map((note: string) => <Text key={note} style={styles.value}>• {note}</Text>) : <Text style={styles.value}>No notes provided</Text>}
+        </> : <Text style={styles.helper}>No troubleshooting session attached to this lead.</Text>}
       </View>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Contractor packet intelligence</Text>
-        {packet ? (
-          <>
-            <Text style={styles.label}>Severity explanation</Text>
-            <Text style={styles.value}>{String(packet.severityExplanation || 'Not provided')}</Text>
-            <Text style={styles.label}>Professional verification focus</Text>
-            {Array.isArray(packet.professionalVerificationFocus) && packet.professionalVerificationFocus.length
-              ? packet.professionalVerificationFocus.map((item: string) => <Text key={item} style={styles.value}>• {item}</Text>)
-              : <Text style={styles.value}>No focus items provided</Text>}
-            <Text style={styles.label}>Homeowner safety boundary</Text>
-            {Array.isArray(packet.homeownerSafetyBoundary) && packet.homeownerSafetyBoundary.length
-              ? packet.homeownerSafetyBoundary.map((item: string) => <Text key={item} style={styles.warning}>• {item}</Text>)
-              : <Text style={styles.value}>No safety boundary items provided</Text>}
-            <Text style={styles.label}>Suggested safe photos</Text>
-            {Array.isArray(packet.suggestedPhotoPrompts) && packet.suggestedPhotoPrompts.length
-              ? packet.suggestedPhotoPrompts.map((prompt: any) => <Text key={prompt.id} style={styles.value}>• {prompt.label}: {prompt.instruction} Safety: {prompt.safetyNote}</Text>)
-              : <Text style={styles.value}>No photo prompts provided</Text>}
-            <Text style={styles.label}>Safe checklist status</Text>
-            {Array.isArray(packet.safeChecklist) && packet.safeChecklist.length
-              ? packet.safeChecklist.map((item: any) => <Text key={`${item.label}-${item.status}`} style={styles.value}>• {item.label} [{item.status}]: {item.detail}</Text>)
-              : <Text style={styles.value}>No checklist status provided</Text>}
-          </>
-        ) : <Text style={styles.helper}>No contractor packet intelligence attached to this lead.</Text>}
+        {packet ? <>
+          <Text style={styles.label}>Severity explanation</Text><Text style={styles.value}>{String(packet.severityExplanation || 'Not provided')}</Text>
+          <Text style={styles.label}>Professional verification focus</Text>
+          {Array.isArray(packet.professionalVerificationFocus) && packet.professionalVerificationFocus.length ? packet.professionalVerificationFocus.map((item: string) => <Text key={item} style={styles.value}>• {item}</Text>) : <Text style={styles.value}>No focus items provided</Text>}
+          <Text style={styles.label}>Homeowner safety boundary</Text>
+          {Array.isArray(packet.homeownerSafetyBoundary) && packet.homeownerSafetyBoundary.length ? packet.homeownerSafetyBoundary.map((item: string) => <Text key={item} style={styles.warning}>• {item}</Text>) : <Text style={styles.value}>No safety boundary items provided</Text>}
+          <Text style={styles.label}>Suggested safe photos</Text>
+          {Array.isArray(packet.suggestedPhotoPrompts) && packet.suggestedPhotoPrompts.length ? packet.suggestedPhotoPrompts.map((prompt: any) => <Text key={prompt.id} style={styles.value}>• {prompt.label}: {prompt.instruction} Safety: {prompt.safetyNote}</Text>) : <Text style={styles.value}>No photo prompts provided</Text>}
+          <Text style={styles.label}>Safe checklist status</Text>
+          {Array.isArray(packet.safeChecklist) && packet.safeChecklist.length ? packet.safeChecklist.map((item: any) => <Text key={`${item.label}-${item.status}`} style={styles.value}>• {item.label} [{item.status}]: {item.detail}</Text>) : <Text style={styles.value}>No checklist status provided</Text>}
+        </> : <Text style={styles.helper}>No contractor packet intelligence attached to this lead.</Text>}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Safe photo attachments</Text>
+        {photoSummary ? <Text style={styles.value}>Attached: {photoSummary.attached} • Skipped: {photoSummary.skipped} • N/A: {photoSummary.notApplicable} • Unsafe access: {photoSummary.blocked} • Still needed: {photoSummary.needed}</Text> : null}
+        {!photoAttachments.length ? <Text style={styles.helper}>No photo attachment status was included with this lead.</Text> : null}
+        {photoAttachments.map((photo) => (
+          <View key={photo.promptId} style={styles.photoRow}>
+            <Text style={styles.label}>{photo.promptLabel}</Text>
+            <Text style={styles.value}>Status: {photo.status}{photo.skippedReason ? ` — ${photo.skippedReason}` : ''}</Text>
+            <Text style={styles.helper}>{photo.instruction}</Text>
+            <Text style={styles.warning}>Safety: {photo.safetyNote}</Text>
+            {photo.signedUrl ? <Image source={{ uri: photo.signedUrl }} style={styles.photoPreview} /> : null}
+            {photo.storagePath ? <Text style={styles.helper}>Stored: {photo.storageBucket}/{photo.storagePath}</Text> : null}
+          </View>
+        ))}
       </View>
 
       <View style={styles.card}>
@@ -162,21 +152,10 @@ export default function ContractorLeadDetailScreen({ route, navigation }: any) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Internal contractor notes</Text>
-        <TextInput
-          style={[styles.input, styles.multiline]}
-          placeholder="Add private note for this lead"
-          value={noteBody}
-          onChangeText={setNoteBody}
-          multiline
-        />
+        <TextInput style={[styles.input, styles.multiline]} placeholder="Add private note for this lead" value={noteBody} onChangeText={setNoteBody} multiline />
         <PrimaryButton title="Save Note" onPress={handleAddNote} />
         {notes.length === 0 ? <Text style={styles.helper}>No notes yet.</Text> : null}
-        {notes.map((note) => (
-          <View key={note.id} style={styles.noteRow}>
-            <Text style={styles.value}>{note.note_body}</Text>
-            <Text style={styles.helper}>{new Date(note.created_at).toLocaleString()}</Text>
-          </View>
-        ))}
+        {notes.map((note) => <View key={note.id} style={styles.noteRow}><Text style={styles.value}>{note.note_body}</Text><Text style={styles.helper}>{new Date(note.created_at).toLocaleString()}</Text></View>)}
       </View>
     </ScrollView>
   );
@@ -193,6 +172,8 @@ const styles = StyleSheet.create({
   value: { color: '#0F172A', lineHeight: 21, marginTop: 3 },
   warning: { color: '#991B1B', fontWeight: '800', lineHeight: 21, marginTop: 3 },
   helper: { color: '#64748B', lineHeight: 20 },
+  photoRow: { borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 12, paddingTop: 12 },
+  photoPreview: { height: 180, borderRadius: 12, marginTop: 8, backgroundColor: '#E2E8F0' },
   input: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 12, padding: 12, marginBottom: 10, backgroundColor: '#FFFFFF' },
   multiline: { minHeight: 96, textAlignVertical: 'top' },
   noteRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0' }
