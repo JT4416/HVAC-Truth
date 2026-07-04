@@ -5,6 +5,7 @@ import { AIR_HANDLER_LOCATION_OPTIONS } from '../domain/systemProfileTypes';
 import { useAuth } from '../context/AuthContext';
 import { getPrimarySystem, getProfile, HvacSystemRecord } from '../services/profilePersistence';
 import { listSystemPhotos } from '../services/dataPlatePhotos';
+import { TroubleshootingSessionRecord, buildTroubleshootingReportText, getLatestTroubleshootingSessionForReport } from '../services/troubleshootingSessions';
 
 type SystemPhoto = {
   id: string;
@@ -27,7 +28,7 @@ function safe(value?: string | number | null) {
   return String(value);
 }
 
-function generateReportText(system: HvacSystemRecord | null, zipCode: string, photos: SystemPhoto[]) {
+function generateReportText(system: HvacSystemRecord | null, zipCode: string, photos: SystemPhoto[], troubleshootingSession?: TroubleshootingSessionRecord | null) {
   if (!system) return 'No HVAC system profile has been saved yet.';
 
   const indoorPhoto = photos.find((photo) => photo.photo_type === 'indoor_data_plate');
@@ -65,6 +66,9 @@ function generateReportText(system: HvacSystemRecord | null, zipCode: string, ph
     `Manufacture year: ${safe(system.decoded_manufacture_year)}`,
     `Manufacture month: ${safe(system.decoded_manufacture_month)}`,
     '',
+    'Latest troubleshooting session:',
+    buildTroubleshootingReportText(troubleshootingSession),
+    '',
     'Homeowner notes:',
     safe(system.notes),
     '',
@@ -81,6 +85,7 @@ export default function ContractorReportScreen({ navigation }: any) {
   const [zipCode, setZipCode] = useState('Not provided');
   const [system, setSystem] = useState<HvacSystemRecord | null>(null);
   const [photos, setPhotos] = useState<SystemPhoto[]>([]);
+  const [troubleshootingSession, setTroubleshootingSession] = useState<TroubleshootingSessionRecord | null>(null);
 
   useEffect(() => {
     loadReport();
@@ -95,8 +100,14 @@ export default function ContractorReportScreen({ navigation }: any) {
       const savedSystem = await getPrimarySystem(user.id);
       setSystem(savedSystem);
       if (savedSystem?.id) {
-        const savedPhotos = await listSystemPhotos(savedSystem.id);
+        const [savedPhotos, latestTroubleshooting] = await Promise.all([
+          listSystemPhotos(savedSystem.id),
+          getLatestTroubleshootingSessionForReport(user.id, savedSystem.id)
+        ]);
         setPhotos(savedPhotos as SystemPhoto[]);
+        setTroubleshootingSession(latestTroubleshooting);
+      } else {
+        setTroubleshootingSession(await getLatestTroubleshootingSessionForReport(user.id));
       }
     } catch (error: any) {
       Alert.alert('Could not load report', error?.message ?? 'Please try again.');
@@ -105,7 +116,7 @@ export default function ContractorReportScreen({ navigation }: any) {
     }
   }
 
-  const reportText = useMemo(() => generateReportText(system, zipCode, photos), [system, zipCode, photos]);
+  const reportText = useMemo(() => generateReportText(system, zipCode, photos, troubleshootingSession), [system, zipCode, photos, troubleshootingSession]);
   const indoorPhoto = photos.find((photo) => photo.photo_type === 'indoor_data_plate');
   const outdoorPhoto = photos.find((photo) => photo.photo_type === 'outdoor_data_plate');
 
@@ -170,6 +181,18 @@ export default function ContractorReportScreen({ navigation }: any) {
         <ReportRow label="Confidence" value={system.decoder_confidence} />
         <ReportRow label="Manufacture year" value={system.decoded_manufacture_year} />
         <ReportRow label="Manufacture month" value={system.decoded_manufacture_month} />
+      </ReportSection>
+
+      <ReportSection title="Latest troubleshooting session">
+        {troubleshootingSession ? (
+          <>
+            <ReportRow label="Workflow" value={troubleshootingSession.workflow_title} />
+            <ReportRow label="Severity" value={troubleshootingSession.severity} />
+            <Text style={styles.bodyText}>{safe(troubleshootingSession.result_summary)}</Text>
+            <Text style={styles.photoLabel}>Technician script</Text>
+            <Text style={styles.bodyText}>{safe(troubleshootingSession.homeowner_script)}</Text>
+          </>
+        ) : <Text style={styles.missing}>No saved troubleshooting session attached.</Text>}
       </ReportSection>
 
       <ReportSection title="Homeowner notes">
