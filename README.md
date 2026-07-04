@@ -27,9 +27,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V17 — Troubleshooting Workflow Engine**.
+Current stage: **V18 — Troubleshooting Session Persistence**.
 
-The app now has a homeowner-safe troubleshooting workflow engine with symptom-specific workflows, including the priority “indoor and outdoor units both off” workflow for float switch, condensate drain, horizontal installation, emergency pan, pan switch, and shop-vac drain/pan cleanup checks.
+The app now saves completed homeowner-safe troubleshooting workflows and attaches the latest saved troubleshooting context to contractor reports, homeowner lead requests, and contractor dashboard lead packets.
 
 ## Build History
 
@@ -193,54 +193,10 @@ supabase functions deploy contractor-discovery
 
 ### V17 — Troubleshooting Workflow Engine
 
-V17 replaces the simple troubleshooting evaluator with a homeowner-safe workflow engine.
-
-New V17 files:
-
-```text
-app/src/domain/troubleshootingWorkflowEngine.ts
-app/src/domain/troubleshootingWorkflows.ts
-backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
-docs/features/TROUBLESHOOTING_WORKFLOW_ENGINE.md
-docs/build/NEXT_BUILD_STEPS_V17.md
-```
-
-Updated V17 files:
-
-```text
-app/src/screens/TroubleshootingScreen.tsx
-README.md
-```
-
-V17 workflows:
-
-```text
-Indoor and Outdoor Units Both Off
-No Cooling / Warm Air
-Water Leak / Drain or Pan Issue
-Frozen Coil / Ice Visible
-Weak Airflow
-Odor / Smell Safety Check
-Noise / Vibration
-Quote / Repair Recommendation Check
-```
-
-Priority workflow included:
-
-```text
-Both indoor and outdoor units off:
-1. Check the float switch visually.
-2. Vacuum out the condensate drain line.
-3. If horizontal installation:
-   - Check the emergency pan and/or pan switch.
-   - Clean the drain line and pan with a shop vac.
-```
-
-Safety rule:
-
-```text
-No bypassing safeties. No electrical compartment access. No refrigerant work. No gas or combustion work.
-```
+- Replaced the simple troubleshooting evaluator with a homeowner-safe workflow engine
+- Added the priority both-units-off float switch / drain / emergency pan workflow
+- Added no cooling, water leak, frozen coil, weak airflow, odor, noise, and quote validation workflows
+- Added safety gates for no electrical testing, no refrigerant work, no bypassing safeties, and no combustion work
 
 Run:
 
@@ -248,11 +204,47 @@ Run:
 backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
 ```
 
+### V18 — Troubleshooting Session Persistence
+
+V18 saves completed troubleshooting workflows and attaches them to contractor handoffs.
+
+New V18 files:
+
+```text
+app/src/services/troubleshootingSessions.ts
+docs/features/TROUBLESHOOTING_SESSION_PERSISTENCE.md
+docs/build/NEXT_BUILD_STEPS_V18.md
+```
+
+Updated V18 files:
+
+```text
+app/src/screens/TroubleshootingScreen.tsx
+app/src/screens/ContractorReportScreen.tsx
+app/src/screens/ContractorLeadRequestScreen.tsx
+app/src/screens/ContractorLeadDetailScreen.tsx
+README.md
+```
+
+V18 behavior:
+
+- Saves completed troubleshooting sessions to Supabase.
+- Shows recent troubleshooting sessions on the troubleshooting screen.
+- Adds the latest saved troubleshooting session to the contractor-ready report.
+- Adds the latest saved troubleshooting snapshot to lead request report snapshots.
+- Shows attached troubleshooting context in the contractor dashboard lead packet.
+
+V18 uses the V17 migration:
+
+```text
+backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
+```
+
 ## Next Recommended Build
 
-**V18 — Troubleshooting Session Persistence**
+**V19 — Troubleshooting Session Controls**
 
-Save completed troubleshooting sessions and attach them to contractor reports, lead requests, and dashboard lead packets.
+Let homeowners choose which troubleshooting session to attach, hide sessions from contractor handoffs, and preview exactly what the contractor will receive.
 
 ## Active Repository
 
