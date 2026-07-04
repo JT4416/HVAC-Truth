@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from './src/screens/HomeScreen';
 import TroubleshootingScreen from './src/screens/TroubleshootingScreen';
+import TroubleshootingSessionDetailScreen from './src/screens/TroubleshootingSessionDetailScreen';
 import ContractorFinderScreen from './src/screens/ContractorFinderScreen';
 import MaintenanceTipsScreen from './src/screens/MaintenanceTipsScreen';
 import QuoteCheckerScreen from './src/screens/QuoteCheckerScreen';
@@ -24,6 +25,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 export type RootStackParamList = {
   Home: undefined;
   Troubleshooting: undefined;
+  TroubleshootingSessionDetail: { sessionId: string };
   ContractorFinder: undefined;
   MaintenanceTips: undefined;
   QuoteChecker: undefined;
@@ -58,6 +60,7 @@ function AppNavigator() {
       <Stack.Navigator initialRouteName="Home">
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'HVAC Truth' }} />
         <Stack.Screen name="Troubleshooting" component={TroubleshootingScreen} options={{ title: 'My AC Is Not Working' }} />
+        <Stack.Screen name="TroubleshootingSessionDetail" component={TroubleshootingSessionDetailScreen} options={{ title: 'Troubleshooting Session' }} />
         <Stack.Screen name="ContractorFinder" component={ContractorFinderScreen} options={{ title: 'Find a Technician' }} />
         <Stack.Screen name="MaintenanceTips" component={MaintenanceTipsScreen} options={{ title: 'Maintenance Tips' }} />
         <Stack.Screen name="QuoteChecker" component={QuoteCheckerScreen} options={{ title: 'Check My Quote' }} />
