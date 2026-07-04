@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { TroubleshootingResult, TroubleshootingWorkflow, TroubleshootingAnswers } from '../domain/troubleshootingWorkflowEngine';
+import type { LeadServiceType, LeadUrgency } from './contractorLeadFlow';
 
 export type TroubleshootingSessionRecord = {
   id: string;
@@ -40,6 +41,15 @@ export type TroubleshootingAttachmentSettings = {
   attachToContractorReport?: boolean;
   attachToLeadRequest?: boolean;
   homeownerLabel?: string;
+};
+
+export type TroubleshootingLeadDefaults = {
+  troubleshootingSessionId?: string;
+  sourceWorkflowId: string;
+  serviceType: LeadServiceType;
+  urgency: LeadUrgency;
+  symptomSummary: string;
+  desiredOutcome: string;
 };
 
 export async function saveTroubleshootingSession(input: SaveTroubleshootingSessionInput) {
@@ -192,12 +202,66 @@ export function getRecommendedWorkflowIdForServiceType(serviceType?: string) {
     case 'noise':
       return 'noise-vibration';
     case 'quote_review':
+    case 'quote_second_opinion':
       return 'quote-validation-safe';
     case 'system_not_running':
+    case 'not_turning_on':
       return 'both-indoor-outdoor-off-drain-float';
     default:
       return 'both-indoor-outdoor-off-drain-float';
   }
+}
+
+export function getServiceTypeForWorkflowId(workflowId?: string): LeadServiceType {
+  switch (workflowId) {
+    case 'both-indoor-outdoor-off-drain-float':
+      return 'not_turning_on';
+    case 'water-leak-drain-pan':
+      return 'water_leak';
+    case 'noise-vibration':
+      return 'noise';
+    case 'quote-validation-safe':
+      return 'quote_second_opinion';
+    case 'frozen-coil-airflow':
+    case 'weak-airflow':
+    case 'no-cooling-warm-air':
+      return 'no_cooling';
+    default:
+      return 'other';
+  }
+}
+
+export function getLeadUrgencyForTroubleshootingSeverity(severity?: TroubleshootingSessionRecord['severity']): LeadUrgency {
+  switch (severity) {
+    case 'critical':
+      return 'emergency_today';
+    case 'warning':
+    case 'high':
+      return 'within_24_hours';
+    case 'caution':
+    case 'medium':
+      return 'this_week';
+    default:
+      return 'within_24_hours';
+  }
+}
+
+export function buildLeadDefaultsFromTroubleshootingSession(session: TroubleshootingSessionRecord): TroubleshootingLeadDefaults {
+  const topTriggers = (session.call_pro_when ?? []).slice(0, 3);
+  const triggerText = topTriggers.length ? ` Contractor should especially verify: ${topTriggers.join(' ')}` : '';
+
+  return {
+    troubleshootingSessionId: session.id,
+    sourceWorkflowId: session.workflow_id,
+    serviceType: getServiceTypeForWorkflowId(session.workflow_id),
+    urgency: getLeadUrgencyForTroubleshootingSeverity(session.severity),
+    symptomSummary: [
+      `Homeowner completed HVAC Truth troubleshooting workflow: ${session.workflow_title}.`,
+      session.result_summary ?? 'No troubleshooting summary was saved.',
+      session.homeowner_label ? `Homeowner label: ${session.homeowner_label}.` : ''
+    ].filter(Boolean).join(' '),
+    desiredOutcome: `Request contractor help based on the completed safe troubleshooting session. Homeowner wants a technician to confirm the cause, avoid unsafe DIY work, and provide a fair estimate before repair.${triggerText}`
+  };
 }
 
 export function buildTroubleshootingReportText(session?: TroubleshootingSessionRecord | null) {
