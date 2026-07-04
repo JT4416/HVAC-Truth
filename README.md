@@ -1,6 +1,6 @@
 # HVAC Truth MVP Starter
 
-HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, contractor-ready photo packet handoffs, packet completeness scoring, verified contractor participation rules, and participation admin controls.
+HVAC Truth is a homeowner-focused HVAC assistant app: troubleshooting, quote checking, contractor finding, maintenance education, safe AI guidance, contractor lead routing, verified contractor dashboard delivery, contractor-ready photo packet handoffs, packet completeness scoring, verified contractor participation controls, and delivery-method based contractor routing.
 
 ## MVP Stack
 
@@ -28,11 +28,44 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V25 — Participation Admin Controls**.
+Current stage: **V27 — Delivery Method Cleanup**.
 
-The app now has the service and Supabase foundation for owner/admin control of verified contractor participation status, pause/resume, service area, emergency availability, and capacity limits. The all-or-nothing participation standard remains intact: packet score is informational and does not become a lead-category selection switch.
+The app now separates contractor contact/delivery methods from anything that sounds like lead-category preference. Verified contractors are active or inactive in the network, may define operating limits, and may configure contact routes. They may not cherry-pick only preferred request categories or packet scores.
 
-## Build History
+## Core Marketplace Rule
+
+```text
+Verified contractors are either in or out of the HVAC Truth verified network.
+They may set operating limits.
+They may not cherry-pick request categories.
+Packet score remains informational only.
+```
+
+Allowed contractor/admin controls:
+
+```text
+- service area
+- emergency availability
+- temporary pause status
+- pause reason
+- daily capacity limit
+- weekly capacity limit
+- active / inactive / paused / suspended participation status
+- delivery methods such as dashboard, email, phone, SMS, and website contact form
+```
+
+Not allowed:
+
+```text
+- only replacement estimates
+- only easy calls
+- only high-score packets
+- only quote checks
+- only no-cooling calls
+- only high-dollar calls
+```
+
+## Build History Summary
 
 ### V1-V2 — MVP Foundation
 
@@ -119,13 +152,13 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 - Contractor profile claim screen
 - Claim service
 - Claim migration
-- Contractors submit business info, contact info, service ZIPs, emergency status, and lead preferences
+- Contractors submit business info, contact info, service ZIPs, emergency status, and delivery methods
 
 ### V12 — Contractor Dashboard
 
 - Verified contractor dashboard
 - Lead detail screen
-- Lead preferences screen
+- Contractor participation/settings screen
 - Contractor notes and activity
 - Dashboard access gated by verified dashboard user rows
 
@@ -157,12 +190,6 @@ Run:
 backend/supabase/migrations/20260703_v14_verified_dashboard_lead_routing.sql
 ```
 
-Direct dashboard delivery requires:
-
-- HVAC Truth verification
-- dashboard lead acceptance
-- a real contractor profile ID
-
 ### V15 — Persisted Contractor Discovery
 
 - Searches internal contractor records
@@ -171,7 +198,6 @@ Direct dashboard delivery requires:
 - Matches or creates contractor records
 - Preserves HVAC Truth verification and dashboard lead flags
 - Returns `contractorId`, `persisted`, and `matchMethod` to the app
-- Shows persisted record status in the contractor finder screen
 
 Run:
 
@@ -190,13 +216,12 @@ supabase functions deploy contractor-discovery
 - `Request Help` on a search result navigates to `ContractorLeadRequest`
 - Selected contractor is passed through navigation state
 - Lead request screen replaces the demo list with the selected contractor
-- Contractor ID, verification state, dashboard lead flags, contact route data, and provider source data are preserved
+- Contractor ID, verification state, dashboard flags, contact route data, and provider source data are preserved
 
 ### V17 — Troubleshooting Workflow Engine
 
 - Replaced the simple troubleshooting evaluator with a homeowner-safe workflow engine
-- Added the priority both-units-off float switch / drain / emergency pan workflow
-- Added no cooling, water leak, frozen coil, weak airflow, odor, noise, and quote validation workflows
+- Added safe workflows for no cooling, water leak, frozen coil, weak airflow, odor, noise, and quote validation
 - Added safety gates for no electrical testing, no refrigerant work, no bypassing safeties, and no combustion work
 
 Run:
@@ -209,43 +234,13 @@ backend/supabase/migrations/20260703_v17_troubleshooting_workflow_engine.sql
 
 - Saves completed troubleshooting sessions to Supabase
 - Shows recent troubleshooting sessions on the troubleshooting screen
-- Adds the latest saved troubleshooting session to the contractor-ready report
-- Adds the latest saved troubleshooting snapshot to lead request report snapshots
-- Shows attached troubleshooting context in the contractor dashboard lead packet
+- Adds saved troubleshooting snapshots to contractor reports and lead request packets
 
 ### V19 — Troubleshooting Session Controls
 
-V19 gives homeowners control over saved troubleshooting sessions and contractor visibility.
-
-New V19 files:
-
-```text
-app/src/screens/TroubleshootingSessionDetailScreen.tsx
-backend/supabase/migrations/20260703_v19_troubleshooting_session_controls.sql
-docs/features/TROUBLESHOOTING_SESSION_CONTROLS.md
-docs/build/NEXT_BUILD_STEPS_V19.md
-```
-
-Updated V19 files:
-
-```text
-app/App.tsx
-app/src/screens/TroubleshootingScreen.tsx
-app/src/screens/ContractorLeadRequestScreen.tsx
-app/src/services/troubleshootingSessions.ts
-README.md
-```
-
-V19 behavior:
-
-- Opens saved troubleshooting sessions from history.
-- Lets homeowners label sessions.
-- Lets homeowners attach or hide sessions from contractor reports.
-- Lets homeowners attach or hide sessions from lead packets.
-- Lets homeowners archive sessions so they are hidden from active handoff flows.
-- Lets homeowners choose the exact session to attach during lead request submission.
-- Shows a troubleshooting packet preview before submission.
-- Recommends a troubleshooting workflow based on service type.
+- Opens saved troubleshooting sessions from history
+- Lets homeowners label, archive, attach, or hide sessions from contractor reports and lead packets
+- Lets homeowners choose the exact session to attach during lead request submission
 
 Run after V17 migration:
 
@@ -255,106 +250,25 @@ backend/supabase/migrations/20260703_v19_troubleshooting_session_controls.sql
 
 ### V20 — Troubleshooting to Lead Conversion
 
-V20 lets a completed or saved troubleshooting workflow directly start a contractor lead request.
-
-New V20 files:
-
-```text
-docs/features/TROUBLESHOOTING_TO_LEAD_CONVERSION.md
-docs/build/NEXT_BUILD_STEPS_V20.md
-```
-
-Updated V20 files:
-
-```text
-app/App.tsx
-app/src/screens/TroubleshootingScreen.tsx
-app/src/screens/TroubleshootingSessionDetailScreen.tsx
-app/src/screens/ContractorLeadRequestScreen.tsx
-app/src/services/troubleshootingSessions.ts
-README.md
-```
-
-V20 behavior:
-
-- Adds **I Tried This, Now Request Help** after completed troubleshooting results.
-- Saves the troubleshooting session during direct conversion when needed.
-- Adds the same direct lead action from saved troubleshooting session detail.
-- Routes to `ContractorLeadRequest` with `troubleshootingSessionId` and `leadDefaults`.
-- Prefills service type, urgency, symptom summary, and desired outcome from the troubleshooting session.
-- Preselects the saved troubleshooting session and enables lead packet attachment.
-- Lets homeowners use any selected troubleshooting session to refill lead details.
-- Keeps all homeowner safety boundaries unchanged.
+- Adds **I Tried This, Now Request Help** after completed troubleshooting results
+- Routes to `ContractorLeadRequest` with saved troubleshooting context
+- Prefills service type, urgency, symptom summary, and desired outcome
 
 No new migration is required for V20.
 
 ### V21 — Contractor Packet Intelligence
 
-V21 makes contractor lead packets smarter and workflow-specific without expanding homeowner DIY instructions.
-
-New V21 files:
-
-```text
-docs/features/CONTRACTOR_PACKET_INTELLIGENCE.md
-docs/build/NEXT_BUILD_STEPS_V21.md
-```
-
-Updated V21 files:
-
-```text
-app/src/services/troubleshootingSessions.ts
-app/src/services/contractorLeadFlow.ts
-app/src/services/contractorContactRouting.ts
-app/src/screens/ContractorLeadDetailScreen.tsx
-README.md
-```
-
-V21 behavior:
-
-- Adds `buildContractorPacketIntelligence(session)`.
-- Adds severity explanations for contractor handoff context.
-- Adds workflow-specific professional verification focus items.
-- Adds homeowner safety boundary summaries to contractor packets.
-- Adds safe photo prompts for key troubleshooting workflows.
-- Adds safe checklist status from homeowner-safe workflow steps.
-- Embeds packet intelligence into `reportSnapshot.troubleshooting.contractorPacket`.
-- Includes packet intelligence in saved lead summaries, standardized email/contact packets, lead previews, and contractor dashboard lead detail.
+- Adds workflow-specific contractor handoff intelligence
+- Adds severity explanations, professional verification focus, safety summaries, and safe photo prompts
+- Embeds packet intelligence into lead reports and contractor dashboard detail
 
 No new migration is required for V21.
 
 ### V22 — Photo Capture for Contractor Packets
 
-V22 turns V21 safe photo prompts into homeowner upload/status controls.
-
-New V22 files:
-
-```text
-app/src/services/contractorPacketPhotos.ts
-backend/supabase/migrations/20260704_v22_contractor_packet_photo_storage.sql
-docs/features/CONTRACTOR_PACKET_PHOTO_ATTACHMENTS.md
-docs/build/NEXT_BUILD_STEPS_V22.md
-```
-
-Updated V22 files:
-
-```text
-app/src/screens/ContractorLeadRequestScreen.tsx
-app/src/screens/ContractorLeadDetailScreen.tsx
-app/src/services/contractorLeadFlow.ts
-app/src/services/contractorContactRouting.ts
-README.md
-```
-
-V22 behavior:
-
-- Shows safe photo prompts in the contractor lead request flow.
-- Lets homeowners take/retake photos from safe visible areas only.
-- Lets homeowners skip, mark not applicable, or mark unsafe access.
-- Uploads attached packet photos to private Supabase Storage.
-- Stores photo metadata and status in `reportSnapshot.troubleshooting.contractorPacket.photoAttachments`.
-- Stores summary counts in `reportSnapshot.troubleshooting.contractorPacket.photoAttachmentSummary`.
-- Shows photo previews/status in contractor dashboard lead detail.
-- Adds photo status to saved lead summaries and standardized contact packets.
+- Turns safe photo prompts into homeowner upload/status controls
+- Uploads packet photos to private Supabase Storage
+- Shows photo status in lead summaries and dashboard detail
 
 Run:
 
@@ -364,67 +278,18 @@ backend/supabase/migrations/20260704_v22_contractor_packet_photo_storage.sql
 
 ### V23 — Contractor Packet Review and Scoring
 
-V23 scores contractor packet completeness before submission and inside contractor dashboard lead detail.
-
-New V23 files:
-
-```text
-app/src/services/contractorPacketScoring.ts
-docs/features/CONTRACTOR_PACKET_REVIEW_AND_SCORING.md
-docs/build/NEXT_BUILD_STEPS_V23.md
-```
-
-Updated V23 files:
-
-```text
-app/src/screens/ContractorLeadRequestScreen.tsx
-app/src/screens/ContractorLeadDetailScreen.tsx
-app/src/services/contractorLeadFlow.ts
-app/src/services/contractorContactRouting.ts
-README.md
-```
-
-V23 behavior:
-
-- Adds `buildContractorPacketScore(input)` and `buildPacketScoreText(score)`.
-- Shows a packet score card before homeowner lead submission.
-- Saves the final score in `reportSnapshot.packetScore`.
-- Adds contractor badges: `Complete`, `Strong`, `Needs details`, and `Thin`.
-- Shows missing high-value fields and warnings before submission.
-- Shows packet score, badge, missing fields, and full score details in contractor dashboard lead detail.
-- Adds packet score to saved lead summary and standardized contact packet text.
-- Adds score context to phone scripts.
+- Scores contractor packet completeness before submission and inside contractor dashboard lead detail
+- Adds badges: Complete, Strong, Needs details, and Thin
+- Packet score is informational only
 
 No new migration is required for V23.
 
 ### V24 — Verified Contractor Participation Rules
 
-V24 defines verified contractor routing as active network participation plus operating limits.
-
-New V24 files:
-
-```text
-app/src/services/contractorParticipationRules.ts
-backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
-docs/features/VERIFIED_CONTRACTOR_PARTICIPATION_RULES.md
-docs/build/NEXT_BUILD_STEPS_V24.md
-```
-
-Updated V24 files:
-
-```text
-app/src/services/verifiedLeadRouting.ts
-app/src/services/contractorLeadFlow.ts
-README.md
-```
-
-V24 behavior:
-
-- Adds a verified contractor participation rules service.
-- Uses active participation plus operating limits for verified dashboard routing.
-- Allows service area, emergency availability, pause status, and capacity limits.
-- Keeps packet score informational.
-- Adds contractor participation fields to Supabase.
+- Adds verified contractor participation rules service
+- Uses active participation plus operating limits for verified dashboard routing
+- Allows service area, emergency availability, pause status, and capacity limits
+- Keeps packet score informational
 
 Run:
 
@@ -434,32 +299,11 @@ backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
 
 ### V25 — Participation Admin Controls
 
-V25 adds the service and Supabase foundation for managing verified contractor participation.
-
-New V25 files:
-
-```text
-app/src/services/contractorParticipationAdmin.ts
-backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
-docs/features/PARTICIPATION_ADMIN_CONTROLS.md
-docs/build/NEXT_BUILD_STEPS_V25.md
-```
-
-Updated V25 files:
-
-```text
-app/src/services/contractorClaimReview.ts
-README.md
-```
-
-V25 behavior:
-
-- Adds `getParticipationContractors()` and `getParticipationContractor(contractorId)`.
-- Adds `updateContractorParticipation(input)`.
-- Adds `buildAdminParticipationSummary(contractor, zipCode)`.
-- Adds admin policy/RPC support for participation updates.
-- Adds activity/event logging for participation changes.
-- Aligns claim review checklist with the participation standard.
+- Adds `getParticipationContractors()` and `getParticipationContractor(contractorId)`
+- Adds `updateContractorParticipation(input)`
+- Adds `buildAdminParticipationSummary(contractor, zipCode)`
+- Adds admin policy/RPC support for participation updates
+- Adds activity/event logging for participation changes
 
 Run after V24:
 
@@ -467,11 +311,61 @@ Run after V24:
 backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
 ```
 
+### V26 — Participation Control Screens
+
+- Added admin participation contractor list screen
+- Added admin participation detail editor screen
+- Added active / inactive / paused / suspended status controls
+- Added pause reason, service ZIP, emergency availability, and lead capacity controls
+- Reworked contractor-facing copy from **Lead Preferences** to **Participation Settings**
+
+### V27 — Delivery Method Cleanup
+
+New V27 files:
+
+```text
+app/src/services/contractorDeliveryMethods.ts
+backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql
+docs/features/DELIVERY_METHOD_CLEANUP.md
+docs/build/NEXT_BUILD_STEPS_V27.md
+```
+
+Updated V27 files:
+
+```text
+app/src/services/contractorDashboard.ts
+app/src/services/contractorClaimReview.ts
+app/src/screens/ContractorProfileClaimScreen.tsx
+app/src/screens/ContractorLeadPreferencesScreen.tsx
+app/src/screens/AdminContractorClaimDetailScreen.tsx
+README.md
+```
+
+V27 behavior:
+
+- Adds a delivery-method service with fallback to the legacy `contractor_lead_preferences` table.
+- Adds a forward migration for `contractor_delivery_methods` and backfills records from legacy delivery rows.
+- Updates contractor claim, claim review, and participation settings copy to say delivery methods instead of lead preferences.
+- Keeps dashboard, email, phone, SMS, and website contact form routing options.
+- Preserves the all-or-nothing verified contractor participation standard.
+
+Run after V25:
+
+```text
+backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql
+```
+
 ## Next Recommended Build
 
-**V26 — Participation Control Screens**
+**V28 — Local Validation and Supabase Migration Hardening**
 
-Build the visible admin/contractor screens for active/inactive status, pause/resume, service area, emergency availability, and capacity limits.
+Recommended next work:
+
+- Run local TypeScript validation.
+- Run Expo startup validation.
+- Review V25 policy syntax for Supabase/Postgres compatibility.
+- Apply migrations in a clean Supabase branch or staging project.
+- Replace any unsupported `create policy if not exists` statements with explicit `drop policy if exists` plus `create policy` blocks.
 
 ## Active Repository
 
