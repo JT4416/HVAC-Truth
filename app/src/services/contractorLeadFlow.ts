@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { getPrimarySystem, getProfile, HvacSystemRecord } from './profilePersistence';
 import { detectContractorContactRoute, ContractorContactProfile } from './contractorContactRouting';
+import { buildVerifiedLeadRoutingDecisions, getContractorId } from './verifiedLeadRouting';
 
 export type LeadServiceType =
   | 'no_cooling'
@@ -80,7 +81,8 @@ export const DEMO_CONTRACTORS: SelectedContractor[] = [
     distanceMiles: 0.8,
     verified: true,
     emergencyService: true,
-    hvacTruthVerified: false
+    hvacTruthVerified: true,
+    acceptsDashboardLeads: true
   },
   {
     businessName: 'Coastal Comfort HVAC',
@@ -133,6 +135,8 @@ export function createContractorReportSnapshot(system: HvacSystemRecord | null, 
 export function buildLeadSummary(input: ContractorLeadRequestInput) {
   const service = SERVICE_TYPE_OPTIONS.find((option) => option.value === input.serviceType);
   const urgency = URGENCY_OPTIONS.find((option) => option.value === input.urgency);
+  const routingDecisions = buildVerifiedLeadRoutingDecisions(input.selectedContractors);
+  const dashboardCount = routingDecisions.filter((decision) => decision.dashboardReady).length;
 
   return [
     'HVAC Truth Contractor Lead Request',
@@ -142,6 +146,7 @@ export function buildLeadSummary(input: ContractorLeadRequestInput) {
     `Urgency: ${urgency?.label ?? input.urgency}`,
     `Preferred contact: ${input.contactPreference}`,
     `Preferred time window: ${input.preferredTimeWindow || 'Not provided'}`,
+    `Verified dashboard recipients: ${dashboardCount}`,
     '',
     'Homeowner issue summary:',
     input.symptomSummary || 'Not provided',
@@ -165,6 +170,7 @@ export async function loadLeadFlowDefaults(userId: string) {
 
 export async function submitContractorLeadRequest(input: ContractorLeadRequestInput): Promise<LeadRequestRecord> {
   const leadSummary = buildLeadSummary(input);
+  const routingDecisions = buildVerifiedLeadRoutingDecisions(input.selectedContractors);
 
   const { data: request, error } = await supabase
     .from('contractor_lead_requests')
@@ -192,12 +198,13 @@ export async function submitContractorLeadRequest(input: ContractorLeadRequestIn
 
   if (error) throw error;
 
-  const recipients = input.selectedContractors.map((contractor) => {
-    const route = detectContractorContactRoute(contractor);
+  const recipients = routingDecisions.map((decision) => {
+    const contractor = decision.contractor;
+    const route = decision.dashboardReady ? decision.route : detectContractorContactRoute(contractor);
     return {
       user_id: input.userId,
       lead_request_id: request.id,
-      contractor_id: contractor.id ?? null,
+      contractor_id: getContractorId(contractor),
       contractor_name: contractor.businessName,
       contractor_phone: contractor.phone ?? null,
       contractor_email: contractor.publishedEmail ?? null,
@@ -205,7 +212,9 @@ export async function submitContractorLeadRequest(input: ContractorLeadRequestIn
       contractor_contact_page_url: contractor.contactPageUrl ?? null,
       delivery_method: route.preferredMethod,
       delivery_destination: route.destination ?? null,
-      recipient_status: 'selected'
+      route_instructions: route.instructions,
+      homeowner_action_required: route.requiresHomeownerAction,
+      recipient_status: decision.dashboardReady ? 'sent' : 'selected'
     };
   });
 
