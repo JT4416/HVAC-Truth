@@ -31,7 +31,7 @@ export type RootStackParamList = {
   MySystem: undefined;
   SystemDecoder: undefined;
   ContractorReport: undefined;
-  ContractorLeadRequest: undefined;
+  ContractorLeadRequest: { selectedContractor?: any } | undefined;
   ContractorProfileClaim: undefined;
   ContractorDashboard: undefined;
   ContractorLeadDetail: { leadId: string };
