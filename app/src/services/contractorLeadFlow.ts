@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { getPrimarySystem, getProfile, HvacSystemRecord } from './profilePersistence';
-import { detectContractorContactRoute, ContractorContactProfile } from './contractorContactRouting';
-import { buildVerifiedLeadRoutingDecisions, getContractorId } from './verifiedLeadRouting';
+import { ContractorContactProfile } from './contractorContactRouting';
+import { buildVerifiedLeadRoutingDecisions, getContractorId, getLeadDeliveryRoute } from './verifiedLeadRouting';
 
 export type LeadServiceType =
   | 'no_cooling'
@@ -200,7 +200,7 @@ export async function submitContractorLeadRequest(input: ContractorLeadRequestIn
 
   const recipients = routingDecisions.map((decision) => {
     const contractor = decision.contractor;
-    const route = decision.dashboardReady ? decision.route : detectContractorContactRoute(contractor);
+    const route = getLeadDeliveryRoute(contractor);
     return {
       user_id: input.userId,
       lead_request_id: request.id,
