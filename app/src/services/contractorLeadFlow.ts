@@ -98,27 +98,20 @@ function buildContractorPacketSummary(reportSnapshot?: Record<string, any>) {
   if (!packet) return [];
   const photoAttachments = (packet.photoAttachments ?? []) as any[];
   const photoSummary = packet.photoAttachmentSummary;
-
   return [
-    '',
-    'Contractor packet intelligence:',
+    '', 'Contractor packet intelligence:',
     `Workflow: ${packet.workflowTitle ?? 'Not provided'}`,
     `Severity explanation: ${packet.severityExplanation ?? 'Not provided'}`,
-    '',
-    'Professional verification focus:',
+    '', 'Professional verification focus:',
     ...((packet.professionalVerificationFocus ?? []) as string[]).map((item) => `- ${item}`),
-    '',
-    'Homeowner safety boundary:',
+    '', 'Homeowner safety boundary:',
     ...((packet.homeownerSafetyBoundary ?? []) as string[]).map((item) => `- ${item}`),
-    '',
-    'Safe photo attachment summary:',
+    '', 'Safe photo attachment summary:',
     photoSummary ? `Attached: ${photoSummary.attached}; skipped: ${photoSummary.skipped}; not applicable: ${photoSummary.notApplicable}; unsafe access: ${photoSummary.blocked}; still needed: ${photoSummary.needed}` : 'No photo status summary provided.',
     ...photoAttachments.map((photo) => `- ${photo.promptLabel}: ${photo.status}${photo.storagePath ? ` (${photo.storageBucket}/${photo.storagePath})` : ''}${photo.skippedReason ? ` — ${photo.skippedReason}` : ''}`),
-    '',
-    'Suggested safe photos:',
+    '', 'Suggested safe photos:',
     ...((packet.suggestedPhotoPrompts ?? []) as any[]).map((prompt) => `- ${prompt.label}: ${prompt.instruction}`),
-    '',
-    'Safe checklist status:',
+    '', 'Safe checklist status:',
     ...((packet.safeChecklist ?? []) as any[]).map((item) => `- ${item.label} [${item.status}]: ${item.detail}`)
   ];
 }
@@ -132,31 +125,22 @@ function buildPacketScoreSummary(reportSnapshot?: Record<string, any>) {
 export function buildLeadSummary(input: ContractorLeadRequestInput) {
   const service = SERVICE_TYPE_OPTIONS.find((option) => option.value === input.serviceType);
   const urgency = URGENCY_OPTIONS.find((option) => option.value === input.urgency);
-  const routingDecisions = buildVerifiedLeadRoutingDecisions(input.selectedContractors);
+  const routingDecisions = buildVerifiedLeadRoutingDecisions(input.selectedContractors, input.zipCode);
   const dashboardCount = routingDecisions.filter((decision) => decision.dashboardReady).length;
-
   return [
-    'HVAC Truth Contractor Lead Request',
-    '',
+    'HVAC Truth Contractor Lead Request', '',
     `ZIP code: ${input.zipCode}`,
     `Service type: ${service?.label ?? input.serviceType}`,
     `Urgency: ${urgency?.label ?? input.urgency}`,
     `Preferred contact: ${input.contactPreference}`,
     `Preferred time window: ${input.preferredTimeWindow || 'Not provided'}`,
     `Verified dashboard recipients: ${dashboardCount}`,
-    '',
-    'Homeowner issue summary:',
-    input.symptomSummary || 'Not provided',
-    '',
-    'Desired outcome:',
-    input.desiredOutcome || 'Not provided',
-    '',
-    'Contractor context:',
-    service?.contractorContext ?? 'Review request details and system report before scheduling.',
+    '', 'Homeowner issue summary:', input.symptomSummary || 'Not provided',
+    '', 'Desired outcome:', input.desiredOutcome || 'Not provided',
+    '', 'Contractor context:', service?.contractorContext ?? 'Review request details and system report before scheduling.',
     ...buildContractorPacketSummary(input.reportSnapshot),
     ...buildPacketScoreSummary(input.reportSnapshot),
-    '',
-    input.attachContractorReport ? 'Contractor-ready system report attached/included.' : 'Homeowner did not attach system report.'
+    '', input.attachContractorReport ? 'Contractor-ready system report attached/included.' : 'Homeowner did not attach system report.'
   ].join('\n');
 }
 
@@ -169,7 +153,7 @@ export async function loadLeadFlowDefaults(userId: string) {
 
 export async function submitContractorLeadRequest(input: ContractorLeadRequestInput): Promise<LeadRequestRecord> {
   const leadSummary = buildLeadSummary(input);
-  const routingDecisions = buildVerifiedLeadRoutingDecisions(input.selectedContractors);
+  const routingDecisions = buildVerifiedLeadRoutingDecisions(input.selectedContractors, input.zipCode);
   const { data: request, error } = await supabase.from('contractor_lead_requests').insert({
     user_id: input.userId,
     hvac_system_id: input.hvacSystemId ?? null,
@@ -189,12 +173,10 @@ export async function submitContractorLeadRequest(input: ContractorLeadRequestIn
     lead_summary: leadSummary,
     lead_status: 'submitted'
   }).select('*').single();
-
   if (error) throw error;
-
   const recipients = routingDecisions.map((decision) => {
     const contractor = decision.contractor;
-    const route = getLeadDeliveryRoute(contractor);
+    const route = getLeadDeliveryRoute(contractor, input.zipCode);
     return {
       user_id: input.userId,
       lead_request_id: request.id,
@@ -211,11 +193,9 @@ export async function submitContractorLeadRequest(input: ContractorLeadRequestIn
       recipient_status: decision.dashboardReady ? 'sent' : 'selected'
     };
   });
-
   if (recipients.length) {
     const { error: recipientError } = await supabase.from('contractor_lead_recipients').insert(recipients);
     if (recipientError) throw recipientError;
   }
-
   return request as LeadRequestRecord;
 }
