@@ -18,6 +18,7 @@ export type ContractorClaimReviewRecord = {
   service_radius_miles?: number | null;
   emergency_service: boolean;
   lead_preferences: string[];
+  delivery_methods: string[];
   verification_notes?: string | null;
   claim_status: ContractorClaimStatus;
   reviewed_by?: string | null;
@@ -41,10 +42,12 @@ export function normalizeClaimArray(value: unknown): string[] {
 }
 
 export function mapContractorClaimReviewRecord(row: any): ContractorClaimReviewRecord {
+  const deliveryMethods = normalizeClaimArray(row.delivery_methods || row.lead_preferences);
   return {
     ...row,
     service_zip_codes: normalizeClaimArray(row.service_zip_codes),
-    lead_preferences: normalizeClaimArray(row.lead_preferences)
+    lead_preferences: deliveryMethods,
+    delivery_methods: deliveryMethods
   };
 }
 
@@ -106,7 +109,8 @@ export function buildClaimReviewChecklist(claim: ContractorClaimReviewRecord) {
     claim.website ? 'Website provided' : 'Website missing',
     claim.service_zip_codes.length > 0 ? 'Service ZIP codes provided' : 'Service ZIP codes missing',
     claim.emergency_service ? 'Emergency availability provided' : 'Standard-hours availability provided',
-    'Verified participation standard acknowledged: active contractors accept all eligible HVAC Truth lead types inside operating limits'
+    claim.delivery_methods.length > 0 ? 'Delivery methods provided' : 'Delivery methods missing',
+    'Verified participation standard acknowledged: active contractors accept all eligible HVAC Truth request types inside operating limits'
   ];
 }
 
@@ -116,7 +120,7 @@ export function buildClaimParticipationDefaults(claim: ContractorClaimReviewReco
     acceptsAllEligibleLeadTypes: true,
     serviceZipCodes: claim.service_zip_codes,
     emergencyService: claim.emergency_service,
-    deliveryMethods: claim.lead_preferences
+    deliveryMethods: claim.delivery_methods
   };
 }
 
