@@ -29,9 +29,9 @@ HVAC Truth helps homeowners understand, document, and ask better questions. It m
 
 ## Current Build Stage
 
-Current stage: **V29 — Claim Review RPC Delivery Method Write-Through**.
+Current stage: **V30 — Staging Validation and Claim Approval Test Harness**.
 
-V29 updates the contractor claim approval database flow so verified claims now write delivery/contact routes directly to `contractor_delivery_methods` while preserving legacy compatibility rows in `contractor_lead_preferences` during the transition period.
+V30 adds a rollback-safe Supabase SQL harness that validates the V29 claim review delivery-method write-through flow. The harness approves a synthetic contractor claim, verifies `contractor_delivery_methods`, verifies legacy `contractor_lead_preferences`, checks destination mapping, confirms dashboard access, and rolls back by default.
 
 ## Core Marketplace Rule
 
@@ -245,36 +245,39 @@ values ('<profile_uuid>', 'owner', true);
 
 ### V29 — Claim Review RPC Delivery Method Write-Through
 
-New V29 files:
+- Added `backend/supabase/migrations/20260704_v29_claim_review_delivery_method_write_through.sql`
+- Added `docs/build/V29_CLAIM_REVIEW_DELIVERY_METHOD_WRITE_THROUGH.md`
+- Replaced `public.review_contractor_profile_claim(...)`
+- Approved claims now write to `public.contractor_delivery_methods`
+- Legacy compatibility rows are still written to `public.contractor_lead_preferences`
+- Contractor-level legacy delivery fields remain populated during the transition
+- Verified dashboard access, contractor service areas, and verified contractor status are preserved
+
+### V30 — Staging Validation and Claim Approval Test Harness
+
+New V30 files:
 
 ```text
-backend/supabase/migrations/20260704_v29_claim_review_delivery_method_write_through.sql
-docs/build/V29_CLAIM_REVIEW_DELIVERY_METHOD_WRITE_THROUGH.md
+backend/supabase/tests/v30_claim_review_delivery_method_write_through_test.sql
+docs/build/V30_STAGING_VALIDATION_AND_TEST_HARNESS.md
 ```
 
-Updated V29 files:
+V30 behavior:
 
-```text
-README.md
-docs/features/DELIVERY_METHOD_CLEANUP.md
+- Adds a rollback-safe SQL harness for local/staging Supabase validation.
+- Requires two existing `public.profiles.id` UUIDs: reviewer and contractor user.
+- Promotes the reviewer profile to an owner inside the transaction.
+- Creates and approves a synthetic contractor claim covering dashboard, email, phone, SMS, and website form delivery methods.
+- Asserts contractor verification, dashboard access, service areas, new delivery-method rows, legacy compatibility rows, and destination mapping.
+- Ends with `rollback;` by default so it is repeatable.
+
+Run after V29 in a local, staging, or clean Supabase branch:
+
+```bash
+psql "$SUPABASE_DB_URL" -f backend/supabase/tests/v30_claim_review_delivery_method_write_through_test.sql
 ```
 
-V29 behavior:
-
-- Replaces `public.review_contractor_profile_claim(...)`.
-- Approved claims now write to `public.contractor_delivery_methods`.
-- Legacy compatibility rows are still written to `public.contractor_lead_preferences`.
-- Contractor-level legacy delivery fields remain populated during the transition.
-- Verified dashboard access, contractor service areas, and verified contractor status are preserved.
-
-Run after V27:
-
-```text
-backend/supabase/migrations/20260704_v24_verified_contractor_participation.sql
-backend/supabase/migrations/20260704_v25_participation_admin_controls.sql
-backend/supabase/migrations/20260704_v27_delivery_method_cleanup.sql
-backend/supabase/migrations/20260704_v29_claim_review_delivery_method_write_through.sql
-```
+Or paste the script into Supabase SQL editor after replacing the placeholder profile UUIDs.
 
 ## Local Validation
 
@@ -291,14 +294,13 @@ Run Supabase migrations in a clean branch or staging project before production.
 
 ## Next Recommended Build
 
-**V30 — Staging Validation and Claim Approval Test Harness**
+**V31 — Claim Approval Harness Expansion and App Read Verification**
 
 Recommended next work:
 
-- Run the V24, V25, V27, and V29 migrations in a clean Supabase branch or staging project.
-- Create a seed/test claim for each delivery method.
-- Approve the claim through `review_contractor_profile_claim`.
-- Confirm `contractor_delivery_methods` and legacy compatibility rows match.
+- Add negative-path harness cases for unauthorized reviewer, invalid decision, and missing claim.
+- Add read-path verification for `getContractorDeliveryMethods(contractorId)` behavior.
+- Add an app-side or fixture-level check confirming new delivery rows are preferred before legacy fallback.
 - Run local `npm run typecheck` and Expo validation.
 
 ## Active Repository
